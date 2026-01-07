@@ -275,7 +275,7 @@ std::optional<DeviceMapper::Info> DeviceMapper::GetDetailedInfo(const std::strin
     if (ioctl(fd_, DM_DEV_STATUS, &io) < 0) {
         return std::nullopt;
     }
-    return Info(io.flags);
+    return Info(io.flags, io.dev);
 }
 
 DmDeviceState DeviceMapper::GetState(const std::string& name) const {
