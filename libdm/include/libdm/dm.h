@@ -110,15 +110,21 @@ class DeviceMapper final : public IDeviceMapper {
 
     class Info {
         uint32_t flags_;
+        dev_t dev_;
 
       public:
-        explicit Info(uint32_t flags) : flags_(flags) {}
+        explicit Info(uint32_t flags, dev_t dev) : flags_(flags), dev_(dev) {}
 
+        // Flags
         bool IsActiveTablePresent() const { return flags_ & DM_ACTIVE_PRESENT_FLAG; }
         bool IsBufferFull() const { return flags_ & DM_BUFFER_FULL_FLAG; }
         bool IsInactiveTablePresent() const { return flags_ & DM_INACTIVE_PRESENT_FLAG; }
         bool IsReadOnly() const { return flags_ & DM_READONLY_FLAG; }
         bool IsSuspended() const { return !IsActiveTablePresent() || (flags_ & DM_SUSPEND_FLAG); }
+
+        // Dev
+        std::string GetPath() const { return "/dev/block/dm-" + std::to_string(minor(dev_)); }
+        dev_t GetDev() const { return dev_; }
     };
 
     // Removes a device mapper device with the given name.
