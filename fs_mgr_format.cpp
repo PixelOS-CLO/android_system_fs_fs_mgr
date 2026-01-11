@@ -158,6 +158,11 @@ static int format_f2fs(const std::string& fs_blkdev, uint64_t dev_sz, bool needs
         args.push_back("-O");
         args.push_back("extra_attr");
     }
+    if (android::base::GetBoolProperty("external_storage.packedssa.enabled", false)) {
+        args.push_back("-O");
+        args.push_back("packed_ssa");
+    }
+
     args.push_back("-w");
     args.push_back(block_size.c_str());
     args.push_back("-b");

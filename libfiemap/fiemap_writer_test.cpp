@@ -165,6 +165,7 @@ TEST_F(FiemapWriterTest, CheckPinning) {
 
 TEST_F(FiemapWriterTest, CheckBlockDevicePath) {
     FiemapUniquePtr fptr = FiemapWriter::Open(testfile, gBlockSize);
+    ASSERT_NE(fptr, nullptr);
     EXPECT_EQ(fptr->size(), gBlockSize);
     EXPECT_EQ(fptr->bdev_path().find("/dev/block/"), size_t(0));
 
@@ -347,7 +348,7 @@ TEST_F(SplitFiemapTest, CorruptSplit) {
 
 TEST_F(SplitFiemapTest, Grow) {
     uint64_t file_size = 768_KiB;
-    uint64_t max_piece_size = 32_KiB;
+    uint64_t max_piece_size = 64_KiB;
     auto ptr = SplitFiemap::Create(testfile, file_size, max_piece_size);
     ASSERT_NE(ptr, nullptr);
 
@@ -388,7 +389,7 @@ static string ReadSplitFiles(const std::string& base_path, size_t num_files) {
 }
 
 TEST_F(SplitFiemapTest, WriteWholeFile) {
-    static constexpr size_t kChunkSize = 32768;
+    static constexpr size_t kChunkSize = 32_KiB;
     static constexpr size_t kSize = kChunkSize * 3;
     auto ptr = SplitFiemap::Create(testfile, kSize, kChunkSize);
     ASSERT_NE(ptr, nullptr);
@@ -491,9 +492,10 @@ std::pair<uint64_t, uint64_t> GetBigFileLimit(const std::string& mount_point) {
 
 class FsTest : public ::testing::Test {
   protected:
-    // 2GB Filesystem and 4k block size by default
-    static constexpr uint64_t block_size = 4096;
-    static constexpr uint64_t fs_size = 64 * 1024 * 1024;
+    // 64MB Filesystem by default
+    uint64_t fs_size_ = 64_MiB;
+    uint64_t block_size_ = 4096;
+    uint64_t too_big_size_ = 16_TiB;
 
     void SetUp() {
         android::fs_mgr::Fstab fstab;
@@ -515,11 +517,11 @@ class FsTest : public ::testing::Test {
     }
 
     void SetUpExt4() {
-        uint64_t count = fs_size / block_size;
+        uint64_t count = fs_size_ / block_size_;
         std::string dd_cmd =
                 ::android::base::StringPrintf("/system/bin/dd if=/dev/zero of=%s bs=%" PRIu64
                                               " count=%" PRIu64 " > /dev/null 2>&1",
-                                              fs_path_.c_str(), block_size, count);
+                                              fs_path_.c_str(), block_size_, count);
         std::string mkfs_cmd =
                 ::android::base::StringPrintf("/system/bin/mkfs.ext4 -q %s", fs_path_.c_str());
         // create mount point
@@ -539,13 +541,22 @@ class FsTest : public ::testing::Test {
     }
 
     void SetUpF2fs() {
-        uint64_t count = fs_size / block_size;
+        block_size_ = getpagesize();
+
+        // With 16K pages, F2FS needs more metadata space.
+        if (block_size_ == 16_KiB) {
+            fs_size_ = 512_MiB;
+            too_big_size_ = 64_TiB;
+        }
+
+        uint64_t count = fs_size_ / block_size_;
         std::string dd_cmd =
                 ::android::base::StringPrintf("/system/bin/dd if=/dev/zero of=%s bs=%" PRIu64
                                               " count=%" PRIu64 " > /dev/null 2>&1",
-                                              fs_path_.c_str(), block_size, count);
+                                              fs_path_.c_str(), block_size_, count);
         std::string mkfs_cmd =
-                ::android::base::StringPrintf("/system/bin/make_f2fs -q %s", fs_path_.c_str());
+                ::android::base::StringPrintf("/system/bin/make_f2fs -q %s -b %" PRIu64,
+                                              fs_path_.c_str(), block_size_);
         // create mount point
         ASSERT_EQ(mkdir(mntpoint_.c_str(), S_IRWXU), 0);
         // create file for the file system
@@ -586,7 +597,7 @@ TEST_F(FsTest, LowSpaceError) {
     ASSERT_EQ(status.error_code(), FiemapStatus::ErrorCode::NO_SPACE);
 
     // Also test for EFBIG.
-    status = FiemapWriter::Open(test_file, 16_TiB, &ptr);
+    status = FiemapWriter::Open(test_file, too_big_size_, &ptr);
     ASSERT_FALSE(status.is_ok());
     ASSERT_NE(status.error_code(), FiemapStatus::ErrorCode::NO_SPACE);
 }
@@ -623,7 +634,7 @@ int main(int argc, char** argv) {
 
     std::string root_dir = "/data/local/unencrypted";
     if (access(root_dir.c_str(), F_OK)) {
-        root_dir = "/data";
+        root_dir = "/data/local/tmp";
     }
 
     std::string tempdir = root_dir + "/XXXXXX"s;
