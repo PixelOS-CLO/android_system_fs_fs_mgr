@@ -449,7 +449,6 @@ class SnapshotManager final : public ISnapshotManager {
     FRIEND_TEST(SnapshotTest, FlashSuperDuringMerge);
     FRIEND_TEST(SnapshotTest, FlashSuperDuringUpdate);
     FRIEND_TEST(SnapshotTest, MapPartialSnapshot);
-    FRIEND_TEST(SnapshotTest, MapSnapshot);
     FRIEND_TEST(SnapshotTest, Merge);
     FRIEND_TEST(SnapshotTest, MergeFailureCode);
     FRIEND_TEST(SnapshotTest, NoMergeBeforeReboot);
@@ -544,16 +543,7 @@ class SnapshotManager final : public ISnapshotManager {
     // backing COW image using the size previously passed to CreateSnapshot().
     Return CreateCowImage(LockedFile* lock, const std::string& name);
 
-    // Map a snapshot device that was previously created with CreateSnapshot.
-    // If a merge was previously initiated, the device-mapper table will have a
-    // snapshot-merge target instead of a snapshot target. If the timeout
-    // parameter greater than zero, this function will wait the given amount
-    // of time for |dev_path| to become available, and fail otherwise. If
-    // timeout_ms is 0, then no wait will occur and |dev_path| may not yet
-    // exist on return.
-    bool MapSnapshot(LockedFile* lock, const std::string& name, const std::string& base_device,
-                     const std::string& cow_device, const std::chrono::milliseconds& timeout_ms,
-                     std::string* dev_path);
+
     bool MapUserspaceCowDmUser(const std::string& name, const std::string& misc_name,
                                const std::string& cow_file, const std::string& base_device,
                                const std::string& base_path_merge, uint64_t base_sectors,
@@ -601,7 +591,7 @@ class SnapshotManager final : public ISnapshotManager {
     // caller is responsible for ensuring that the snapshot is unmapped.
     bool DeleteSnapshot(LockedFile* lock, const std::string& name);
 
-    // Unmap a snapshot device previously mapped with MapSnapshotDevice().
+    // Unmap a snapshot device.
     bool UnmapSnapshot(LockedFile* lock, const std::string& name);
 
     // Unmap a COW image device previously mapped with MapCowImage().
@@ -919,9 +909,6 @@ class SnapshotManager final : public ISnapshotManager {
     // Set read-ahead size during OTA
     void SetReadAheadSize(const std::string& entry_block_device, off64_t size_kb);
 
-    // Returns true post OTA reboot if legacy snapuserd is required
-    bool IsLegacySnapuserdPostReboot();
-
     // Returns true if dm_name device has ublk device as parent
     bool IsParentUblkDevice(const std::string& dm_name);
 
@@ -935,7 +922,6 @@ class SnapshotManager final : public ISnapshotManager {
     std::unique_ptr<LpMetadata> old_partition_metadata_;
     std::optional<bool> is_snapshot_userspace_;
     std::optional<bool> is_snapshot_ublk_;
-    std::optional<bool> is_legacy_snapuserd_;
 };
 
 }  // namespace snapshot
