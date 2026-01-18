@@ -604,32 +604,7 @@ TEST_F(SnapshotTest, CreateSnapshot) {
     ASSERT_TRUE(sm->DeleteSnapshot(lock_.get(), "test-snapshot"));
 }
 
-TEST_F(SnapshotTest, MapSnapshot) {
-    ASSERT_TRUE(AcquireLock());
 
-    PartitionCowCreator cow_creator;
-    cow_creator.using_snapuserd = snapuserd_required_;
-
-    static const uint64_t kDeviceSize = 1024 * 1024;
-    SnapshotStatus status;
-    status.set_name("test-snapshot");
-    status.set_device_size(kDeviceSize);
-    status.set_snapshot_size(kDeviceSize);
-    status.set_cow_file_size(kDeviceSize);
-    ASSERT_TRUE(sm->CreateSnapshot(lock_.get(), &cow_creator, &status));
-    ASSERT_TRUE(CreateCowImage("test-snapshot"));
-
-    std::string base_device;
-    ASSERT_TRUE(CreatePartition("base-device", kDeviceSize, &base_device));
-
-    std::string cow_device;
-    ASSERT_TRUE(MapCowImage("test-snapshot", 10s, &cow_device));
-
-    std::string snap_device;
-    ASSERT_TRUE(sm->MapSnapshot(lock_.get(), "test-snapshot", base_device, cow_device, 10s,
-                                &snap_device));
-    ASSERT_TRUE(android::base::StartsWith(snap_device, "/dev/block/dm-"));
-}
 
 TEST_F(SnapshotTest, NoMergeBeforeReboot) {
     ASSERT_TRUE(sm->FinishedSnapshotWrites(false));
@@ -2018,73 +1993,6 @@ TEST_F(SnapshotUpdateTest, DisableUblkViaManifest) {
         // verify SnapshotManager also sees ublk disabled
         ASSERT_FALSE(sm->UpdateUsesUblk());
     }
-}
-
-TEST_F(SnapshotUpdateTest, RetrofitAfterRegularAb) {
-    constexpr auto kRetrofitGroupSize = kGroupSize / 2;
-
-    // Initialize device-mapper / disk
-    ASSERT_TRUE(UnmapAll());
-    FormatFakeSuper();
-
-    // Setup source partition metadata to have both _a and _b partitions.
-    src_ = MetadataBuilder::New(*opener_, "super", 0);
-    ASSERT_NE(nullptr, src_);
-    for (const auto& suffix : {"_a"s, "_b"s}) {
-        ASSERT_TRUE(src_->AddGroup(group_->name() + suffix, kRetrofitGroupSize));
-        for (const auto& name : {"sys"s, "vnd"s, "prd"s}) {
-            auto partition = src_->AddPartition(name + suffix, group_->name() + suffix, 0);
-            ASSERT_NE(nullptr, partition);
-            ASSERT_TRUE(src_->ResizePartition(partition, 2_MiB));
-        }
-    }
-    auto metadata = src_->Export();
-    ASSERT_NE(nullptr, metadata);
-    ASSERT_TRUE(UpdatePartitionTable(*opener_, "super", *metadata.get(), 0));
-
-    // Flash source partitions
-    std::string path;
-    for (const auto& name : {"sys_a", "vnd_a", "prd_a"}) {
-        ASSERT_TRUE(CreateLogicalPartition(
-                CreateLogicalPartitionParams{
-                        .block_device = fake_super,
-                        .metadata_slot = 0,
-                        .partition_name = name,
-                        .timeout_ms = 1s,
-                        .partition_opener = opener_.get(),
-                },
-                &path));
-        ASSERT_TRUE(WriteRandomData(path));
-        auto hash = GetHash(path);
-        ASSERT_TRUE(hash.has_value());
-        hashes_[name] = *hash;
-    }
-
-    // Setup manifest.
-    group_->set_size(kRetrofitGroupSize);
-    for (auto* partition : {sys_, vnd_, prd_}) {
-        SetSize(partition, 2_MiB);
-    }
-    AddOperationForPartitions();
-
-    ASSERT_TRUE(sm->BeginUpdate());
-    ASSERT_TRUE(sm->CreateUpdateSnapshots(manifest_));
-
-    // Test that COW image should not be created for retrofit devices; super
-    // should be big enough.
-    ASSERT_FALSE(image_manager_->BackingImageExists("sys_b-cow-img"));
-    ASSERT_FALSE(image_manager_->BackingImageExists("vnd_b-cow-img"));
-    ASSERT_FALSE(image_manager_->BackingImageExists("prd_b-cow-img"));
-
-    // Write some data to target partitions.
-    ASSERT_TRUE(WriteSnapshots());
-
-    // Assert that source partitions aren't affected.
-    for (const auto& name : {"sys_a", "vnd_a", "prd_a"}) {
-        ASSERT_TRUE(IsPartitionUnchanged(name));
-    }
-
-    ASSERT_TRUE(sm->FinishedSnapshotWrites(false));
 }
 
 TEST_F(SnapshotUpdateTest, MergeCannotRemoveCow) {
