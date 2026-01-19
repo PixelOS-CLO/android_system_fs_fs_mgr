@@ -1538,6 +1538,9 @@ int fs_mgr_mount_all(Fstab* fstab, int mount_mode) {
     int encryptable = FS_MGR_MNTALL_DEV_NOT_ENCRYPTABLE;
     int error_count = 0;
     CheckpointManager checkpoint_manager;
+    char propbuf[PROPERTY_VALUE_MAX];
+    char propbuf_buid_type[PROPERTY_VALUE_MAX];
+    bool is_ffbm = false;
     AvbUniquePtr avb_handle(nullptr);
     bool wiped = false;
     bool userdata_mounted = false;
@@ -1545,6 +1548,12 @@ int fs_mgr_mount_all(Fstab* fstab, int mount_mode) {
     if (fstab->empty()) {
         return FS_MGR_MNTALL_FAIL;
     }
+    /**get boot mode*/
+    property_get("ro.bootmode", propbuf, "");
+    property_get("ro.build.type", propbuf_buid_type, "");
+    if (((strncmp(propbuf, "ffbm-00", 7) == 0) || (strncmp(propbuf, "ffbm-01", 7) == 0)) &&
+       ((strncmp(propbuf_buid_type, "eng", 3) == 0) || (strncmp(propbuf_buid_type, "userdebug", 9) == 0)))
+        is_ffbm = true;
 
     bool scratch_can_be_mounted = true;
 
@@ -1552,6 +1561,11 @@ int fs_mgr_mount_all(Fstab* fstab, int mount_mode) {
     // where top_idx is 0. It will give SIGABRT
     for (int i = 0; i < static_cast<int>(fstab->size()); i++) {
         auto& current_entry = (*fstab)[i];
+
+        /* Skip userdata partition in ffbm mode */
+        if (is_ffbm && !strcmp(current_entry.mount_point.c_str(), "/data")){
+            continue;
+        }
 
         // If a filesystem should have been mounted in the first stage, we
         // ignore it here. With one exception, if the filesystem is
