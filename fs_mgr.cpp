@@ -1275,7 +1275,10 @@ class CheckpointManager {
     bool UpdateCheckpointPartition(FstabEntry* entry, const std::string& block_device) {
         if (entry->fs_mgr_flags.checkpoint_fs) {
             if (is_f2fs(entry->fs_type)) {
-                entry->fs_checkpoint_opts = ",checkpoint=disable";
+                if (!android::base::GetBoolProperty("ro.boot.zufs_provisioned", false)) {
+                    entry->fs_checkpoint_opts = ",nodiscard";
+                }
+                entry->fs_checkpoint_opts += ",checkpoint=disable";
             } else {
                 LERROR << entry->fs_type << " does not implement checkpoints.";
             }
