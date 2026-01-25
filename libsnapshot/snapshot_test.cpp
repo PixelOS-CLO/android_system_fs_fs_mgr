@@ -604,8 +604,6 @@ TEST_F(SnapshotTest, CreateSnapshot) {
     ASSERT_TRUE(sm->DeleteSnapshot(lock_.get(), "test-snapshot"));
 }
 
-
-
 TEST_F(SnapshotTest, NoMergeBeforeReboot) {
     ASSERT_TRUE(sm->FinishedSnapshotWrites(false));
 

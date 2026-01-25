@@ -63,7 +63,6 @@ using android::dm::DeviceMapper;
 using android::dm::DmDeviceState;
 using android::dm::DmTable;
 using android::dm::DmTargetLinear;
-using android::dm::DmTargetSnapshot;
 using android::dm::DmTargetUser;
 using android::dm::kSectorSize;
 using android::dm::SnapshotStorageMode;
@@ -192,6 +191,17 @@ static std::string GetBaseDeviceName(const std::string& partition_name) {
 
 static std::string GetSourceDeviceName(const std::string& partition_name) {
     return partition_name + "-src";
+}
+
+// This returns the backing device, not the dm-user layer.
+static std::string GetMappedCowDeviceName(const std::string& snapshot,
+                                          const SnapshotStatus& status) {
+    // If no partition was created (the COW exists entirely on /data), the
+    // device-mapper layering is different than if we had a partition.
+    if (status.cow_partition_size() == 0) {
+        return GetCowImageDeviceName(snapshot);
+    }
+    return GetCowName(snapshot);
 }
 
 bool SnapshotManager::BeginUpdate() {
@@ -1212,18 +1222,7 @@ bool SnapshotManager::InitiateMerge() {
 
     std::vector<std::string> first_merge_group;
 
-    DmTargetSnapshot::Status initial_target_values = {};
     for (const auto& snapshot : snapshots) {
-        if (!UpdateUsesUserSnapshots(lock.get())) {
-            DmTargetSnapshot::Status current_status;
-            if (!QuerySnapshotStatus(snapshot, nullptr, &current_status)) {
-                return false;
-            }
-            initial_target_values.sectors_allocated += current_status.sectors_allocated;
-            initial_target_values.total_sectors += current_status.total_sectors;
-            initial_target_values.metadata_sectors += current_status.metadata_sectors;
-        }
-
         SnapshotStatus snapshot_status;
         if (!ReadSnapshotStatus(lock.get(), snapshot, &snapshot_status)) {
             return false;
@@ -1238,12 +1237,6 @@ bool SnapshotManager::InitiateMerge() {
     SnapshotUpdateStatus initial_status = ReadSnapshotUpdateStatus(lock.get());
     initial_status.set_state(UpdateState::Merging);
     initial_status.set_using_snapuserd(using_snapuserd);
-
-    if (!UpdateUsesUserSnapshots(lock.get())) {
-        initial_status.set_sectors_allocated(initial_target_values.sectors_allocated);
-        initial_status.set_total_sectors(initial_target_values.total_sectors);
-        initial_status.set_metadata_sectors(initial_target_values.metadata_sectors);
-    }
 
     // If any partitions shrunk, we need to merge them before we merge any other
     // partitions (see b/177935716). Otherwise, a merge from another partition
@@ -1314,56 +1307,13 @@ MergeFailureCode SnapshotManager::SwitchSnapshotToMerge(LockedFile* lock, const 
             LOG(ERROR) << "Failed to connect to snapuserd daemon to initiate merge";
             return MergeFailureCode::UnknownTable;
         }
-    } else {
-        // After this, we return true because we technically did switch to a merge
-        // target. Everything else we do here is just informational.
-        if (auto code = RewriteSnapshotDeviceTable(name); code != MergeFailureCode::Ok) {
-            return code;
-        }
     }
 
     status.set_state(SnapshotState::MERGING);
 
-    if (!UpdateUsesUserSnapshots(lock)) {
-        DmTargetSnapshot::Status dm_status;
-        if (!QuerySnapshotStatus(name, nullptr, &dm_status)) {
-            LOG(ERROR) << "Could not query merge status for snapshot: " << name;
-        }
-        status.set_sectors_allocated(dm_status.sectors_allocated);
-        status.set_metadata_sectors(dm_status.metadata_sectors);
-    }
-
     if (!WriteSnapshotStatus(lock, status)) {
         LOG(ERROR) << "Could not update status file for snapshot: " << name;
     }
-    return MergeFailureCode::Ok;
-}
-
-MergeFailureCode SnapshotManager::RewriteSnapshotDeviceTable(const std::string& name) {
-    std::vector<DeviceMapper::TargetInfo> old_targets;
-    if (!dm_.GetTableInfo(name, &old_targets)) {
-        LOG(ERROR) << "Could not read snapshot device table: " << name;
-        return MergeFailureCode::GetTableInfo;
-    }
-    if (old_targets.size() != 1 || DeviceMapper::GetTargetType(old_targets[0].spec) != "snapshot") {
-        LOG(ERROR) << "Unexpected device-mapper table for snapshot: " << name;
-        return MergeFailureCode::UnknownTable;
-    }
-
-    std::string base_device, cow_device;
-    if (!DmTargetSnapshot::GetDevicesFromParams(old_targets[0].data, &base_device, &cow_device)) {
-        LOG(ERROR) << "Could not derive underlying devices for snapshot: " << name;
-        return MergeFailureCode::GetTableParams;
-    }
-
-    DmTable table;
-    table.Emplace<DmTargetSnapshot>(0, old_targets[0].spec.length, base_device, cow_device,
-                                    SnapshotStorageMode::Merge, kSnapshotChunkSize);
-    if (!dm_.LoadTableAndActivate(name, table)) {
-        LOG(ERROR) << "Could not swap device-mapper tables on snapshot device " << name;
-        return MergeFailureCode::ActivateNewTable;
-    }
-    LOG(INFO) << "Successfully switched snapshot device to a merge target: " << name;
     return MergeFailureCode::Ok;
 }
 
@@ -1454,27 +1404,6 @@ auto SnapshotManager::UpdateStateToStr(const enum UpdateState state) {
         default:
             return "Unknown";
     }
-}
-
-bool SnapshotManager::QuerySnapshotStatus(const std::string& dm_name, std::string* target_type,
-                                          DmTargetSnapshot::Status* status) {
-    DeviceMapper::TargetInfo target;
-    if (!IsSnapshotDevice(dm_name, &target)) {
-        LOG(ERROR) << "Device " << dm_name << " is not a snapshot or snapshot-merge device";
-        return false;
-    }
-    if (!DmTargetSnapshot::ParseStatusText(target.data, status)) {
-        LOG(ERROR) << "Could not parse snapshot status text: " << dm_name;
-        return false;
-    }
-    if (target_type) {
-        *target_type = DeviceMapper::GetTargetType(target.spec);
-    }
-    if (!status->error.empty()) {
-        LOG(ERROR) << "Snapshot: " << dm_name << " returned error code: " << status->error;
-        return false;
-    }
-    return true;
 }
 
 // Note that when a merge fails, we will *always* try again to complete the
@@ -1765,37 +1694,6 @@ auto SnapshotManager::CheckTargetMergeState(LockedFile* lock, const std::string&
             LOG(ERROR) << "Snapshot " << name << " has incorrect status: " << merge_status;
             return MergeResult(UpdateState::MergeFailed, MergeFailureCode::ExpectedMergeTarget);
         }
-    } else {
-        // dm-snapshot in the kernel
-        std::string target_type;
-        DmTargetSnapshot::Status status;
-        if (!QuerySnapshotStatus(name, &target_type, &status)) {
-            return MergeResult(UpdateState::MergeFailed, MergeFailureCode::QuerySnapshotStatus);
-        }
-        if (target_type == "snapshot" &&
-            DecideMergePhase(snapshot_status) == MergePhase::SECOND_PHASE &&
-            update_status.merge_phase() == MergePhase::FIRST_PHASE) {
-            // The snapshot is not being merged because it's in the wrong phase.
-            return MergeResult(UpdateState::None);
-        }
-        if (target_type != "snapshot-merge") {
-            // We can get here if we failed to rewrite the target type in
-            // InitiateMerge(). If we failed to create the target in first-stage
-            // init, boot would not succeed.
-            LOG(ERROR) << "Snapshot " << name << " has incorrect target type: " << target_type;
-            return MergeResult(UpdateState::MergeFailed, MergeFailureCode::ExpectedMergeTarget);
-        }
-
-        // These two values are equal when merging is complete.
-        if (status.sectors_allocated != status.metadata_sectors) {
-            if (snapshot_status.state() == SnapshotState::MERGE_COMPLETED) {
-                LOG(ERROR) << "Snapshot " << name
-                           << " is merging after being marked merge-complete.";
-                return MergeResult(UpdateState::MergeFailed,
-                                   MergeFailureCode::UnmergedSectorsAfterCompletion);
-            }
-            return MergeResult(UpdateState::Merging);
-        }
     }
 
     // Merging is done. First, update the status file to indicate the merge
@@ -1814,17 +1712,6 @@ auto SnapshotManager::CheckTargetMergeState(LockedFile* lock, const std::string&
         return MergeResult(UpdateState::MergeNeedsReboot);
     }
     return MergeResult(UpdateState::MergeCompleted, MergeFailureCode::Ok);
-}
-
-// This returns the backing device, not the dm-user layer.
-static std::string GetMappedCowDeviceName(const std::string& snapshot,
-                                          const SnapshotStatus& status) {
-    // If no partition was created (the COW exists entirely on /data), the
-    // device-mapper layering is different than if we had a partition.
-    if (status.cow_partition_size() == 0) {
-        return GetCowImageDeviceName(snapshot);
-    }
-    return GetCowName(snapshot);
 }
 
 MergeFailureCode SnapshotManager::MergeSecondPhaseSnapshots(LockedFile* lock) {
@@ -1942,27 +1829,6 @@ void SnapshotManager::AcknowledgeMergeFailure(MergeFailureCode failure_code) {
 bool SnapshotManager::OnSnapshotMergeComplete(LockedFile* lock, const std::string& name,
                                               const SnapshotStatus& status) {
     if (!UpdateUsesUserSnapshots(lock)) {
-        if (IsSnapshotDevice(name)) {
-            // We are extra-cautious here, to avoid deleting the wrong table.
-            std::string target_type;
-            DmTargetSnapshot::Status dm_status;
-            if (!QuerySnapshotStatus(name, &target_type, &dm_status)) {
-                return false;
-            }
-            if (target_type != "snapshot-merge") {
-                LOG(ERROR) << "msg3: Unexpected target type " << target_type
-                           << " for snapshot device: " << name;
-                return false;
-            }
-            if (dm_status.sectors_allocated != dm_status.metadata_sectors) {
-                LOG(ERROR) << "Merge is unexpectedly incomplete for device " << name;
-                return false;
-            }
-            if (!CollapseSnapshotDevice(lock, name, status)) {
-                LOG(ERROR) << "Unable to collapse snapshot: " << name;
-                return false;
-            }
-        }
     } else {
         // Just collapse the device - no need to query again as we just did
         // prior to calling this function
@@ -1984,26 +1850,6 @@ bool SnapshotManager::OnSnapshotMergeComplete(LockedFile* lock, const std::strin
 
 bool SnapshotManager::CollapseSnapshotDevice(LockedFile* lock, const std::string& name,
                                              const SnapshotStatus& status) {
-    if (!UpdateUsesUserSnapshots(lock)) {
-        // Verify we have a snapshot-merge device.
-        DeviceMapper::TargetInfo target;
-        if (!GetSingleTarget(name, TableQuery::Table, &target)) {
-            return false;
-        }
-        if (DeviceMapper::GetTargetType(target.spec) != "snapshot-merge") {
-            // This should be impossible, it was checked earlier.
-            LOG(ERROR) << "Snapshot device has invalid target type: " << name;
-            return false;
-        }
-
-        std::string base_device, cow_device;
-        if (!DmTargetSnapshot::GetDevicesFromParams(target.data, &base_device, &cow_device)) {
-            LOG(ERROR) << "Could not parse snapshot device " << name
-                       << " parameters: " << target.data;
-            return false;
-        }
-    }
-
     uint64_t snapshot_sectors = status.snapshot_size() / kSectorSize;
     if (snapshot_sectors * kSectorSize != status.snapshot_size()) {
         LOG(ERROR) << "Snapshot " << name
@@ -2545,34 +2391,8 @@ UpdateState SnapshotManager::GetUpdateState(double* progress) {
         return state;
     }
 
-    if (!UpdateUsesUserSnapshots(lock.get())) {
-        // Sum all the snapshot states as if the system consists of a single huge
-        // snapshots device, then compute the merge completion percentage of that
-        // device.
-        std::vector<std::string> snapshots;
-        if (!ListSnapshots(lock.get(), &snapshots)) {
-            LOG(ERROR) << "Could not list snapshots";
-            return state;
-        }
-
-        DmTargetSnapshot::Status fake_snapshots_status = {};
-        for (const auto& snapshot : snapshots) {
-            DmTargetSnapshot::Status current_status;
-
-            if (!IsSnapshotDevice(snapshot)) continue;
-            if (!QuerySnapshotStatus(snapshot, nullptr, &current_status)) continue;
-
-            fake_snapshots_status.sectors_allocated += current_status.sectors_allocated;
-            fake_snapshots_status.total_sectors += current_status.total_sectors;
-            fake_snapshots_status.metadata_sectors += current_status.metadata_sectors;
-        }
-
-        *progress = DmTargetSnapshot::MergePercent(fake_snapshots_status,
-                                                   update_status.sectors_allocated());
-    } else {
-        if (EnsureSnapuserdConnected()) {
-            *progress = snapuserd_client_->GetMergePercent();
-        }
+    if (EnsureSnapuserdConnected()) {
+        *progress = snapuserd_client_->GetMergePercent();
     }
 
     return state;

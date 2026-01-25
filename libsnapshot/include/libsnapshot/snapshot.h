@@ -482,7 +482,6 @@ class SnapshotManager final : public ISnapshotManager {
     friend struct AutoDeleteSnapshot;
     friend struct PartitionCowCreator;
 
-    using DmTargetSnapshot = android::dm::DmTargetSnapshot;
     using IImageManager = android::fiemap::IImageManager;
     using TargetInfo = android::dm::DeviceMapper::TargetInfo;
 
@@ -542,7 +541,6 @@ class SnapshotManager final : public ISnapshotManager {
     // |name| should be the base partition name (e.g. "system_a"). Create the
     // backing COW image using the size previously passed to CreateSnapshot().
     Return CreateCowImage(LockedFile* lock, const std::string& name);
-
 
     bool MapUserspaceCowDmUser(const std::string& name, const std::string& misc_name,
                                const std::string& cow_file, const std::string& base_device,
@@ -682,8 +680,7 @@ class SnapshotManager final : public ISnapshotManager {
 
     // Note that these require the name of the device containing the snapshot,
     // which may be the "inner" device. Use GetsnapshotDeviecName().
-    bool QuerySnapshotStatus(const std::string& dm_name, std::string* target_type,
-                             DmTargetSnapshot::Status* status);
+
     bool IsSnapshotDevice(const std::string& dm_name, TargetInfo* target = nullptr);
 
     // Internal callback for when merging is complete.
