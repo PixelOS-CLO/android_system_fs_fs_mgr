@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 
 #include <android-base/logging.h>
 #include <android-base/macros.h>
@@ -126,6 +127,30 @@ void DmTargetVerity::CheckAtMostOnce() {
 }
 
 void DmTargetVerity::TryVerifyInTasklet() {
+    // Check that we're running on a kernel that includes the right version
+    // of the optimization.
+    struct utsname uts;
+    unsigned int major, minor, patch;
+
+    if ((uname(&uts) != 0) ||
+        (sscanf(uts.release, "%u.%u.%u", &major, &minor, &patch) != 3)) {
+        LOG(ERROR) << "Could not parse the kernel version, not turning on "
+                   << "try_verify_in_tasklet";
+        return;
+    }
+    // 05c9b03f4ca7fc4a0a046928b93ecd920943499f is the commit on
+    // android16-6.12 that should be included for the optimization to be turned
+    // on. Improvements to try_verify_in_tasklet made in this and previous
+    // commits should be present (as the previous implementation of the
+    // optimization may not provide the benefits expected), which is why we
+    // check for the kernel version.
+    if (major < 6 || (major == 6 && minor < 12) ||
+        (major == 6 && minor == 12 && patch < 24)) {
+        LOG(WARNING) << "Running on an older kernel: " << major << "." << minor
+                     << "." << patch
+                     << ", will not turn on try_verify_in_tasklet";
+        return;
+    }
     LOG(INFO) << "Adding try_verify_in_tasklet.";
     optional_args_.emplace_back("try_verify_in_tasklet");
 }

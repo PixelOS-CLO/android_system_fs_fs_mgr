@@ -30,6 +30,7 @@
 #include <android-base/scopeguard.h>
 #include <android-base/strings.h>
 #include <android-base/unique_fd.h>
+#include <com_android_libdm.h>
 #include <gtest/gtest.h>
 #include <libdm/dm.h>
 #include <libdm/loop_control.h>
@@ -215,6 +216,17 @@ TEST_F(DmTest, DmVerityArgsAvb2) {
 }
 
 TEST_F(DmTest, DmVerityArgsTryVerifyTasklet) {
+    // Skip if running on a kernel which does not have the latest set of
+    // optimizations.
+    struct utsname uts;
+    unsigned int major, minor, patch;
+    ASSERT_EQ(uname(&uts), 0);
+    ASSERT_EQ(sscanf(uts.release, "%u.%u.%u", &major, &minor, &patch), 3);
+
+    if (major < 6 || (major == 6 && minor < 12) ||
+        (major == 6 && minor == 12 && patch < 24)) {
+        GTEST_SKIP() << "Skipping test on kernel < 6.12.24";
+    }
     std::string device = "/dev/block/platform/soc/1da4000.ufshc/by-name/vendor_a";
     std::string algorithm = "sha1";
     std::string digest = "4be7e823b8c40f7bd5c8ccd5123f0722c5baca21";
@@ -229,6 +241,34 @@ TEST_F(DmTest, DmVerityArgsTryVerifyTasklet) {
             "/dev/block/platform/soc/1da4000.ufshc/by-name/vendor_a 4096 4096 125961 125961 sha1 "
             "4be7e823b8c40f7bd5c8ccd5123f0722c5baca21 cc99f81ecb9484220a003b0719ee59dcf9be7e5d 1 "
             "try_verify_in_tasklet";
+    EXPECT_EQ(target.GetParameterString(), expected);
+}
+
+TEST_F(DmTest, DmVerityArgsTryVerifyTaskletNoImpactOnOlderKernel) {
+    // Skip if running on a kernel which does not have the latest set of
+    // optimizations.
+    struct utsname uts;
+    unsigned int major, minor, patch;
+    ASSERT_EQ(uname(&uts), 0);
+    ASSERT_EQ(sscanf(uts.release, "%u.%u.%u", &major, &minor, &patch), 3);
+
+    if (major > 6 || (major == 6 && minor > 12) ||
+        (major == 6 && minor == 12 && patch >= 24)) {
+        GTEST_SKIP() << "Skipping test on kernel >= 6.12.24";
+    }
+    std::string device = "/dev/block/platform/soc/1da4000.ufshc/by-name/vendor_a";
+    std::string algorithm = "sha1";
+    std::string digest = "4be7e823b8c40f7bd5c8ccd5123f0722c5baca21";
+    std::string salt = "cc99f81ecb9484220a003b0719ee59dcf9be7e5d";
+
+    DmTargetVerity target(0, 10000, 1, device, device, 4096, 4096, 125961, 125961, algorithm,
+                          digest, salt);
+    target.TryVerifyInTasklet();
+
+    std::string expected =
+            "1 /dev/block/platform/soc/1da4000.ufshc/by-name/vendor_a "
+            "/dev/block/platform/soc/1da4000.ufshc/by-name/vendor_a 4096 4096 125961 125961 sha1 "
+            "4be7e823b8c40f7bd5c8ccd5123f0722c5baca21 cc99f81ecb9484220a003b0719ee59dcf9be7e5d";
     EXPECT_EQ(target.GetParameterString(), expected);
 }
 
