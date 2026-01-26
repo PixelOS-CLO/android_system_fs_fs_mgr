@@ -88,9 +88,7 @@ static constexpr char kBootSnapshotsWithoutSlotSwitch[] =
         "/metadata/ota/snapshot-boot-without-slot-switch";
 static constexpr char kBootIndicatorPath[] = "/metadata/ota/snapshot-boot";
 static constexpr char kRollbackIndicatorPath[] = "/metadata/ota/rollback-indicator";
-static constexpr char kSnapuserdFromSystem[] = "/metadata/ota/snapuserd-from-system";
 static constexpr auto kUpdateStateCheckInterval = 2s;
-static constexpr char kOtaFileContext[] = "u:object_r:ota_metadata_file:s0";
 
 /*
  * The readahead size is set to 32kb so that
@@ -384,8 +382,7 @@ bool SnapshotManager::RemoveAllUpdateState(LockedFile* lock, const std::function
     std::vector<std::string> files = {
             GetSnapshotBootIndicatorPath(),          GetRollbackIndicatorPath(),
             GetForwardMergeIndicatorPath(),          GetOldPartitionMetadataPath(),
-            GetBootSnapshotsWithoutSlotSwitchPath(), GetSnapuserdFromSystemPath(),
-            GetSnapuserdModeHintFilePath(),
+            GetBootSnapshotsWithoutSlotSwitchPath(), GetSnapuserdModeHintFilePath(),
     };
     for (const auto& file : files) {
         RemoveFileIfExists(file);
@@ -1769,10 +1766,6 @@ std::string SnapshotManager::GetRollbackIndicatorPath() {
     return metadata_dir_ + "/" + android::base::Basename(kRollbackIndicatorPath);
 }
 
-std::string SnapshotManager::GetSnapuserdFromSystemPath() {
-    return metadata_dir_ + "/" + android::base::Basename(kSnapuserdFromSystem);
-}
-
 std::string SnapshotManager::GetSnapuserdModeHintFilePath() {
     return metadata_dir_ + "/" + android::base::Basename(kSnapuserdModeHintFile);
 }
@@ -2466,34 +2459,6 @@ uint32_t SnapshotManager::GetNumVerificationThreads(LockedFile* lock) {
     return update_status.num_verification_threads();
 }
 
-bool SnapshotManager::MarkSnapuserdFromSystem() {
-    auto path = GetSnapuserdFromSystemPath();
-
-    if (!android::base::WriteStringToFile("1", path)) {
-        PLOG(ERROR) << "Unable to write to vendor update path: " << path;
-        return false;
-    }
-
-    unique_fd fd(open(path.c_str(), O_PATH));
-    if (fd < 0) {
-        PLOG(ERROR) << "Failed to open file: " << path;
-        return false;
-    }
-
-    /*
-     * This function is invoked by first stage init and hence we need to
-     * explicitly set the correct selinux label for this file as update_engine
-     * will try to remove this file later on once the snapshot merge is
-     * complete.
-     */
-    if (fsetxattr(fd.get(), XATTR_NAME_SELINUX, kOtaFileContext, strlen(kOtaFileContext) + 1, 0) <
-        0) {
-        PLOG(ERROR) << "fsetxattr for the path: " << path << " failed";
-    }
-
-    return true;
-}
-
 bool SnapshotManager::UpdateUsesUserSnapshots() {
     // This and the following function is constantly
     // invoked during snapshot merge. We want to avoid
@@ -2528,7 +2493,6 @@ bool SnapshotManager::UpdateUsesUserSnapshots(LockedFile* lock) {
 bool SnapshotManager::ListSnapshots(LockedFile* lock, std::vector<std::string>* snapshots,
                                     const std::string& suffix) {
     CHECK(lock);
-
     auto dir_path = metadata_dir_ + "/snapshots"s;
     std::unique_ptr<DIR, decltype(&closedir)> dir(opendir(dir_path.c_str()), closedir);
     if (!dir) {

@@ -37,6 +37,7 @@ cc_library_static {
 
     static_libs: [
         "libext2_uuid",
+        "libdm_flags_cc_lib",
     ],
     header_libs: [
         "libbase_headers",
@@ -65,6 +66,7 @@ cc_defaults {
     defaults: ["fs_mgr_defaults"],
     static_libs: [
         "libdm",
+        "libdm_flags_cc_lib",
         "libext2_uuid",
         "libfs_mgr",
     ],

@@ -23,10 +23,7 @@
 
 #include <android-base/unique_fd.h>
 #include <libsnapshot/cow_format.h>
-
-namespace chromeos_update_engine {
-class FileDescriptor;
-}  // namespace chromeos_update_engine
+#include <payload_consumer/file_descriptor.h>
 
 namespace android {
 namespace snapshot {

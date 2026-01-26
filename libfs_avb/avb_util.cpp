@@ -25,6 +25,7 @@
 #include <android-base/file.h>
 #include <android-base/strings.h>
 #include <android-base/unique_fd.h>
+#include <com_android_libdm.h>
 
 #include "util.h"
 
@@ -82,6 +83,12 @@ bool ConstructVerityTable(const FsAvbHashtreeDescriptor& hashtree_desc,
 
     if (hashtree_desc.flags & AVB_HASHTREE_DESCRIPTOR_FLAGS_CHECK_AT_MOST_ONCE) {
         target.CheckAtMostOnce();
+    }
+
+
+    if (com::android::libdm::dm_verity_verify_in_tasklet()) {
+        LOG(INFO) << "Adding TryVerifyInTasklet to dm-verity for avb_util";
+        target.TryVerifyInTasklet();
     }
 
     LINFO << "Built verity table: '" << target.GetParameterString() << "'";
