@@ -98,6 +98,9 @@ class TestDeviceInfo : public SnapshotManager::IDeviceInfo {
         unbootable_slots_.insert(slot);
         return true;
     }
+    bool IsSlotMarkedSuccessful([[maybe_unused]] unsigned int slot) override {
+        return slot_marked_successful_;
+    }
     bool IsTestDevice() const override { return true; }
     bool IsFirstStageInit() const override { return first_stage_init_; }
     std::unique_ptr<IImageManager> OpenImageManager() const override {
@@ -119,6 +122,7 @@ class TestDeviceInfo : public SnapshotManager::IDeviceInfo {
     void set_recovery(bool value) { recovery_ = value; }
     void set_first_stage_init(bool value) { first_stage_init_ = value; }
     void set_dm(android::dm::IDeviceMapper* dm) { dm_ = dm; }
+    void set_slot_marked_successful(bool value) { slot_marked_successful_ = value; }
 
     MergeStatus merge_status() const { return merge_status_; }
     bool IsTempMetadata() const override { return temp_metadata_; }
@@ -129,6 +133,7 @@ class TestDeviceInfo : public SnapshotManager::IDeviceInfo {
     MergeStatus merge_status_;
     bool recovery_ = false;
     bool first_stage_init_ = false;
+    bool slot_marked_successful_ = false;
     std::unordered_set<uint32_t> unbootable_slots_;
     android::dm::IDeviceMapper* dm_ = nullptr;
     std::string metadata_dir_ = "/metadata/ota/test";

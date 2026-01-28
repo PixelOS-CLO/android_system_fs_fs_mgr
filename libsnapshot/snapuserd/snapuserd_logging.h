@@ -16,5 +16,5 @@
 
 #include <android-base/logging.h>
 
-#define SNAP_LOG(level) LOG(level) << misc_name_ << ": "
+#define SNAP_LOG(level)  LOG(level) << misc_name_ << ": "
 #define SNAP_PLOG(level) PLOG(level) << misc_name_ << ": "

@@ -41,12 +41,8 @@ TEST(liblp, SlotSuffixForSlotNumber) {
 }
 
 TEST(liblp, GetMetadataOffset) {
-    LpMetadataGeometry geometry = {LP_METADATA_GEOMETRY_MAGIC,
-                                   sizeof(geometry),
-                                   {0},
-                                   16384,
-                                   4,
-                                   4096};
+    LpMetadataGeometry geometry = {
+            LP_METADATA_GEOMETRY_MAGIC, sizeof(geometry), {0}, 16384, 4, 4096};
     static const uint64_t start = LP_PARTITION_RESERVED_BYTES;
     EXPECT_EQ(GetPrimaryMetadataOffset(geometry, 0), start + 8192);
     EXPECT_EQ(GetPrimaryMetadataOffset(geometry, 1), start + 8192 + 16384);

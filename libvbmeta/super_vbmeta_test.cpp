@@ -28,7 +28,7 @@
 #include "utility.h"
 #include "writer.h"
 
-#define FAKE_DATA_SIZE 40960
+#define FAKE_DATA_SIZE      40960
 #define FAKE_PARTITION_SIZE FAKE_DATA_SIZE * 25
 
 using android::base::Result;

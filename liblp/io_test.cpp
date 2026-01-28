@@ -18,6 +18,7 @@
 #include <linux/memfd.h>
 #include <stdio.h>
 #include <sys/syscall.h>
+#include <vector>
 
 #include <android-base/file.h>
 #include <android-base/properties.h>
@@ -103,24 +104,52 @@ static bool AddDefaultPartitions(MetadataBuilder* builder) {
     return builder->ResizePartition(system, 24 * 1024);
 }
 
+// Helper function to create a buffer with a valid super partition image.
+static std::vector<uint8_t> CreateFlashedDiskBuffer() {
+    unique_ptr<MetadataBuilder> builder =
+            MetadataBuilder::New(kDiskSize, kMetadataSize, kMetadataSlots);
+    if (!builder || !AddDefaultPartitions(builder.get())) {
+        return {};
+    }
+    unique_ptr<LpMetadata> exported = builder->Export();
+    if (!exported) {
+        return {};
+    }
+    // Create a temporary disk in memory to flash to.
+    unique_fd fd = CreateFakeDisk();
+    if (fd < 0) {
+        return {};
+    }
+    DefaultPartitionOpener opener(fd);
+    if (!FlashPartitionTable(opener, "super", *exported.get())) {
+        return {};
+    }
+    // Read the contents back into a buffer.
+    std::vector<uint8_t> buffer(kDiskSize);
+    if (lseek(fd.get(), 0, SEEK_SET) < 0) {
+        return {};
+    }
+    if (!android::base::ReadFully(fd.get(), buffer.data(), buffer.size())) {
+        return {};
+    }
+    return buffer;
+}
+
 // Create a temporary disk and flash it with the default partition setup.
 static unique_fd CreateFlashedDisk() {
-    unique_ptr<MetadataBuilder> builder = CreateDefaultBuilder();
-    if (!builder || !AddDefaultPartitions(builder.get())) {
+    auto buffer = CreateFlashedDiskBuffer();
+    if (buffer.empty()) {
         return {};
     }
     unique_fd fd = CreateFakeDisk();
     if (fd < 0) {
         return {};
     }
-    // Export and flash.
-    unique_ptr<LpMetadata> exported = builder->Export();
-    if (!exported) {
+    if (lseek(fd.get(), 0, SEEK_SET) < 0) {
         return {};
     }
 
-    DefaultPartitionOpener opener(fd);
-    if (!FlashPartitionTable(opener, "super", *exported.get())) {
+    if (!android::base::WriteFully(fd.get(), buffer.data(), buffer.size())) {
         return {};
     }
     return fd;
@@ -578,7 +607,8 @@ TEST_F(LiblpTest, UpdateMetadataCleanFailure) {
     unique_ptr<LpMetadata> imported = ReadMetadata(opener, "super", 0);
     ASSERT_NE(imported, nullptr);
     ASSERT_GE(new_table->partitions.size(), 1);
-    ASSERT_EQ(GetPartitionName(new_table->partitions[0]), GetPartitionName(imported->partitions[0]));
+    ASSERT_EQ(GetPartitionName(new_table->partitions[0]),
+              GetPartitionName(imported->partitions[0]));
 
     // Flash again. After, the backup and primary copy should be coherent.
     // Note that the sync step should have used the primary to sync, not
@@ -589,7 +619,8 @@ TEST_F(LiblpTest, UpdateMetadataCleanFailure) {
     imported = ReadMetadata(opener, "super", 0);
     ASSERT_NE(imported, nullptr);
     ASSERT_GE(new_table->partitions.size(), 1);
-    ASSERT_EQ(GetPartitionName(new_table->partitions[0]), GetPartitionName(imported->partitions[0]));
+    ASSERT_EQ(GetPartitionName(new_table->partitions[0]),
+              GetPartitionName(imported->partitions[0]));
 }
 
 // Test that writing a sparse image can be read back.
@@ -692,4 +723,69 @@ TEST_F(LiblpTest, ReadExpandedHeader) {
     EXPECT_EQ(imported->header.header_size, sizeof(LpMetadataHeaderV1_2));
     EXPECT_EQ(imported->header.header_size, exported->header.header_size);
     EXPECT_EQ(imported->header.flags, exported->header.flags);
+}
+
+// Test that we can parse a super partition from an in-memory buffer.
+TEST_F(LiblpTest, ParseSuperPartition) {
+    auto buffer = CreateFlashedDiskBuffer();
+    ASSERT_FALSE(buffer.empty());
+
+    // Test happy path.
+    auto metadata = ParseSuperPartition(buffer.data(), buffer.size(), 0);
+    ASSERT_NE(metadata, nullptr);
+    ASSERT_EQ(metadata->partitions.size(), 1);
+    ASSERT_EQ(GetPartitionName(metadata->partitions[0]), "system");
+}
+
+// Test that parsing fails if the buffer is too small.
+TEST_F(LiblpTest, ParseSuperPartitionTooSmall) {
+    auto buffer = CreateFlashedDiskBuffer();
+    ASSERT_FALSE(buffer.empty());
+
+    size_t bad_size = GetBackupGeometryOffset() + LP_METADATA_GEOMETRY_SIZE - 1;
+    auto metadata = ParseSuperPartition(buffer.data(), bad_size, 0);
+    ASSERT_EQ(metadata, nullptr);
+}
+
+// Test that parsing can recover from corrupted geometry metadata.
+TEST_F(LiblpTest, ParseSuperPartitionCorruptGeometries) {
+    auto buffer = CreateFlashedDiskBuffer();
+    ASSERT_FALSE(buffer.empty());
+
+    // Corrupt primary geometry, backup should be used.
+    memset(buffer.data() + GetPrimaryGeometryOffset(), 0, LP_METADATA_GEOMETRY_SIZE);
+    auto metadata = ParseSuperPartition(buffer.data(), buffer.size(), 0);
+    ASSERT_NE(metadata, nullptr);
+    ASSERT_EQ(metadata->partitions.size(), 1);
+    ASSERT_EQ(GetPartitionName(metadata->partitions[0]), "system");
+
+    // Corrupt backup geometry as well, should fail.
+    memset(buffer.data() + GetBackupGeometryOffset(), 0, LP_METADATA_GEOMETRY_SIZE);
+    metadata = ParseSuperPartition(buffer.data(), buffer.size(), 0);
+    ASSERT_EQ(metadata, nullptr);
+}
+
+// Test that parsing can recover from corrupted partition metadata.
+TEST_F(LiblpTest, ParseSuperPartitionCorruptMetadata) {
+    auto buffer = CreateFlashedDiskBuffer();
+    ASSERT_FALSE(buffer.empty());
+
+    LpMetadataGeometry geometry;
+    unique_fd fd = CreateFlashedDisk();
+    ASSERT_GE(fd, 0);
+    ASSERT_TRUE(ReadPrimaryGeometry(fd, &geometry));
+
+    // Corrupt primary metadata, backup should be used.
+    off_t offset = GetPrimaryMetadataOffset(geometry, 0);
+    memset(buffer.data() + offset, 0, geometry.metadata_max_size);
+    auto metadata = ParseSuperPartition(buffer.data(), buffer.size(), 0);
+    ASSERT_NE(metadata, nullptr);
+    ASSERT_EQ(metadata->partitions.size(), 1);
+    ASSERT_EQ(GetPartitionName(metadata->partitions[0]), "system");
+
+    // Corrupt backup metadata as well, should fail.
+    offset = GetBackupMetadataOffset(geometry, 0);
+    memset(buffer.data() + offset, 0, geometry.metadata_max_size);
+    metadata = ParseSuperPartition(buffer.data(), buffer.size(), 0);
+    ASSERT_EQ(metadata, nullptr);
 }

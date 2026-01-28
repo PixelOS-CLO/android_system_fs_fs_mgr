@@ -21,8 +21,8 @@
 #include <array>
 #include <sstream>
 
-#include <android-base/logging.h>
 #include <android-base/file.h>
+#include <android-base/logging.h>
 #include <android-base/strings.h>
 #include <android-base/unique_fd.h>
 #include <com_android_libdm.h>
@@ -132,7 +132,7 @@ std::unique_ptr<FsAvbHashtreeDescriptor> GetHashtreeDescriptor(
 
     for (const auto& vbmeta : vbmeta_images) {
         size_t num_descriptors;
-        std::unique_ptr<const AvbDescriptor* [], decltype(&avb_free)> descriptors(
+        std::unique_ptr<const AvbDescriptor*[], decltype(&avb_free)> descriptors(
                 avb_descriptor_get_all(vbmeta.data(), vbmeta.size(), &num_descriptors), avb_free);
 
         if (!descriptors || num_descriptors < 1) {
@@ -149,7 +149,7 @@ std::unique_ptr<FsAvbHashtreeDescriptor> GetHashtreeDescriptor(
                 desc_partition_name =
                         (const uint8_t*)descriptors[n] + sizeof(AvbHashtreeDescriptor);
                 if (!avb_hashtree_descriptor_validate_and_byteswap(
-                        (AvbHashtreeDescriptor*)descriptors[n], hashtree_desc.get())) {
+                            (AvbHashtreeDescriptor*)descriptors[n], hashtree_desc.get())) {
                     continue;
                 }
                 if (hashtree_desc->partition_name_len != partition_name.length()) {
@@ -214,9 +214,9 @@ bool LoadAvbHashtreeToEnableVerity(FstabEntry* fstab_entry, bool wait_for_verity
 // If the device is non-A/B, converts it to a partition name without suffix.
 // e.g.,       "system" => "system",
 //       "system_other" => "system".
-std::string AvbPartitionToDevicePatition(const std::string& avb_partition_name,
-                                         const std::string& ab_suffix,
-                                         const std::string& ab_other_suffix) {
+std::string AvbPartitionToDevicePartition(const std::string& avb_partition_name,
+                                          const std::string& ab_suffix,
+                                          const std::string& ab_other_suffix) {
     bool is_other_slot = false;
     std::string sanitized_partition_name(avb_partition_name);
 
@@ -447,7 +447,7 @@ std::vector<ChainInfo> GetChainPartitionInfo(const VBMetaData& vbmeta, bool* fat
     std::vector<ChainInfo> chain_partitions;
 
     size_t num_descriptors;
-    std::unique_ptr<const AvbDescriptor* [], decltype(&avb_free)> descriptors(
+    std::unique_ptr<const AvbDescriptor*[], decltype(&avb_free)> descriptors(
             avb_descriptor_get_all(vbmeta.data(), vbmeta.size(), &num_descriptors), avb_free);
 
     if (!descriptors || num_descriptors < 1) {
@@ -554,14 +554,13 @@ std::unique_ptr<VBMetaData> LoadAndVerifyVbmetaByPath(
 }
 
 VBMetaVerifyResult LoadAndVerifyVbmetaByPartition(
-    const std::string& partition_name, const std::string& ab_suffix,
-    const std::string& ab_other_suffix, const std::string& expected_public_key_blob,
-    bool allow_verification_error, bool load_chained_vbmeta, bool rollback_protection,
-    std::function<std::string(const std::string&)> device_path_constructor, bool is_chained_vbmeta,
-    std::vector<VBMetaData>* out_vbmeta_images) {
+        const std::string& partition_name, const std::string& ab_suffix,
+        const std::string& ab_other_suffix, const std::string& expected_public_key_blob,
+        bool allow_verification_error, bool load_chained_vbmeta, bool rollback_protection,
+        std::function<std::string(const std::string&)> device_path_constructor,
+        bool is_chained_vbmeta, std::vector<VBMetaData>* out_vbmeta_images) {
     auto image_path = device_path_constructor(
-        AvbPartitionToDevicePatition(partition_name, ab_suffix, ab_other_suffix));
-
+            AvbPartitionToDevicePartition(partition_name, ab_suffix, ab_other_suffix));
     bool verification_disabled = false;
     VBMetaVerifyResult verify_result;
     auto vbmeta = LoadAndVerifyVbmetaByPath(image_path, partition_name, expected_public_key_blob,
@@ -585,10 +584,10 @@ VBMetaVerifyResult LoadAndVerifyVbmetaByPartition(
         }
         for (auto& chain : chain_partitions) {
             auto sub_ret = LoadAndVerifyVbmetaByPartition(
-                chain.partition_name, ab_suffix, ab_other_suffix, chain.public_key_blob,
-                allow_verification_error, load_chained_vbmeta, rollback_protection,
-                device_path_constructor, true, /* is_chained_vbmeta */
-                out_vbmeta_images);
+                    chain.partition_name, ab_suffix, ab_other_suffix, chain.public_key_blob,
+                    allow_verification_error, load_chained_vbmeta, rollback_protection,
+                    device_path_constructor, true, /* is_chained_vbmeta */
+                    out_vbmeta_images);
             if (sub_ret != VBMetaVerifyResult::kSuccess) {
                 verify_result = sub_ret;  // might be 'ERROR' or 'ERROR VERIFICATION'.
                 if (verify_result == VBMetaVerifyResult::kError) {

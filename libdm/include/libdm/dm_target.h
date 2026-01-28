@@ -209,16 +209,6 @@ class DmTargetBow final : public DmTarget {
     uint32_t block_size_ = 0;
 };
 
-enum class SnapshotStorageMode {
-    // The snapshot will be persisted to the COW device.
-    Persistent,
-    // The snapshot will be lost on reboot.
-    Transient,
-    // The snapshot will be merged from the COW device into the base device,
-    // in the background.
-    Merge
-};
-
 class DmTargetCrypt final : public DmTarget {
   public:
     DmTargetCrypt(uint64_t start, uint64_t length, const std::string& cipher,

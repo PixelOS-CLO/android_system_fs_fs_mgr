@@ -108,8 +108,7 @@ void DmTargetVerity::UseFec(const std::string& device, uint32_t num_roots, uint3
 }
 
 void DmTargetVerity::SetVerityMode(const std::string& mode) {
-    if (mode != "panic_on_corruption" &&
-        mode != "restart_on_corruption" &&
+    if (mode != "panic_on_corruption" && mode != "restart_on_corruption" &&
         mode != "ignore_corruption") {
         LOG(ERROR) << "Unknown verity mode: " << mode;
         valid_ = false;
@@ -172,8 +171,6 @@ std::string DmTargetBow::GetParameterString() const {
     if (!block_size_) return target_string_;
     return target_string_ + " 1 block_size:" + std::to_string(block_size_);
 }
-
-
 
 std::string DmTargetCrypt::GetParameterString() const {
     std::vector<std::string> argv = {

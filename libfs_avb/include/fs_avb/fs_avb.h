@@ -94,7 +94,7 @@ class AvbHandle {
             const FstabEntry& fstab_entry,
             const std::vector<std::string>& preload_avb_key_blobs = {});
 
-    static AvbUniquePtr LoadAndVerifyVbmeta(    // loads offline vbmeta.
+    static AvbUniquePtr LoadAndVerifyVbmeta(  // loads offline vbmeta.
             const std::string& partition_name, const std::string& ab_suffix,
             const std::string& ab_other_suffix, const std::string& expected_public_key,
             const HashAlgorithm& hash_algorithm, bool allow_verification_error,

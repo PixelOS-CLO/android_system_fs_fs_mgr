@@ -28,16 +28,16 @@ using android::base::Result;
 #define FS_AVB_TAG "[libfs_avb] "
 
 // Logs a message to kernel
-#define LINFO LOG(INFO) << FS_AVB_TAG
-#define LWARNING LOG(WARNING) << FS_AVB_TAG
-#define LERROR LOG(ERROR) << FS_AVB_TAG
-#define LFATAL LOG(FATAL) << FS_AVB_TAG
+#define LINFO      LOG(INFO) << FS_AVB_TAG
+#define LWARNING   LOG(WARNING) << FS_AVB_TAG
+#define LERROR     LOG(ERROR) << FS_AVB_TAG
+#define LFATAL     LOG(FATAL) << FS_AVB_TAG
 
 // Logs a message with strerror(errno) at the end
-#define PINFO PLOG(INFO) << FS_AVB_TAG
-#define PWARNING PLOG(WARNING) << FS_AVB_TAG
-#define PERROR PLOG(ERROR) << FS_AVB_TAG
-#define PFATAL PLOG(FATAL) << FS_AVB_TAG
+#define PINFO      PLOG(INFO) << FS_AVB_TAG
+#define PWARNING   PLOG(WARNING) << FS_AVB_TAG
+#define PERROR     PLOG(ERROR) << FS_AVB_TAG
+#define PFATAL     PLOG(FATAL) << FS_AVB_TAG
 
 extern bool fs_mgr_get_boot_config(const std::string& key, std::string* out_val);
 

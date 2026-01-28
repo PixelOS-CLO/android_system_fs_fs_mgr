@@ -29,21 +29,21 @@ extern "C" {
 #endif
 
 /* Magic signature for LpMetadataGeometry. */
-#define LP_METADATA_GEOMETRY_MAGIC 0x616c4467
+#define LP_METADATA_GEOMETRY_MAGIC              0x616c4467
 
 /* Space reserved for geometry information. */
-#define LP_METADATA_GEOMETRY_SIZE 4096
+#define LP_METADATA_GEOMETRY_SIZE               4096
 
 /* Magic signature for LpMetadataHeader. */
-#define LP_METADATA_HEADER_MAGIC 0x414C5030
+#define LP_METADATA_HEADER_MAGIC                0x414C5030
 
 /* Current metadata version. */
-#define LP_METADATA_MAJOR_VERSION 10
-#define LP_METADATA_MINOR_VERSION_MIN 0
-#define LP_METADATA_MINOR_VERSION_MAX 2
+#define LP_METADATA_MAJOR_VERSION               10
+#define LP_METADATA_MINOR_VERSION_MIN           0
+#define LP_METADATA_MINOR_VERSION_MAX           2
 
 /* Metadata version needed to use the UPDATED partition attribute. */
-#define LP_METADATA_VERSION_FOR_UPDATED_ATTR 1
+#define LP_METADATA_VERSION_FOR_UPDATED_ATTR    1
 
 /* Metadata version needed for the new expanded header struct. */
 #define LP_METADATA_VERSION_FOR_EXPANDED_HEADER 2
@@ -53,24 +53,24 @@ extern "C" {
  * READONLY - The partition should not be considered writable. When used with
  * device mapper, the block device will be created as read-only.
  */
-#define LP_PARTITION_ATTR_NONE 0x0
-#define LP_PARTITION_ATTR_READONLY (1 << 0)
+#define LP_PARTITION_ATTR_NONE                  0x0
+#define LP_PARTITION_ATTR_READONLY              (1 << 0)
 
 /* This flag is historical and is no longer supported.
  *
  * If set, the partition name needs a slot suffix applied.
  */
-#define LP_PARTITION_ATTR_SLOT_SUFFIXED (1 << 1)
+#define LP_PARTITION_ATTR_SLOT_SUFFIXED         (1 << 1)
 
 /* This flag is applied automatically when using MetadataBuilder::NewForUpdate.
  * It signals that the partition was created (or modified) for a snapshot-based
  * update. If this flag is not present, the partition was likely flashed via
  * fastboot.
  */
-#define LP_PARTITION_ATTR_UPDATED (1 << 2)
+#define LP_PARTITION_ATTR_UPDATED               (1 << 2)
 
 /* This flag marks a partition as disabled. It should not be used or mapped. */
-#define LP_PARTITION_ATTR_DISABLED (1 << 3)
+#define LP_PARTITION_ATTR_DISABLED              (1 << 3)
 
 /* Mask that defines all valid attributes. When changing this, make sure to
  * update ParseMetadata().
@@ -99,12 +99,12 @@ extern "C" {
 #define LP_METADATA_DEFAULT_PARTITION_NAME "super"
 
 /* Size of a sector is always 512 bytes for compatibility with the Linux kernel. */
-#define LP_SECTOR_SIZE 512
+#define LP_SECTOR_SIZE                     512
 
 /* Amount of space reserved at the start of every super partition to avoid
  * creating an accidental boot sector.
  */
-#define LP_PARTITION_RESERVED_BYTES 4096
+#define LP_PARTITION_RESERVED_BYTES        4096
 
 /* This structure is stored at block 0 in the first 4096 bytes of the
  * partition, and again in the following block. It is never modified and
@@ -238,7 +238,7 @@ typedef struct LpMetadataHeader {
 #define LP_HEADER_FLAG_VIRTUAL_AB_DEVICE 0x1
 
 /* This device has overlays activated via "adb remount". */
-#define LP_HEADER_FLAG_OVERLAYS_ACTIVE 0x2
+#define LP_HEADER_FLAG_OVERLAYS_ACTIVE   0x2
 
 /* This struct defines a logical partition entry, similar to what would be
  * present in a GUID Partition Table.
@@ -275,7 +275,7 @@ typedef struct LpMetadataPartition {
 #define LP_TARGET_TYPE_LINEAR 0
 
 /* This extent is a dm-zero target. The index is ignored and must be 0. */
-#define LP_TARGET_TYPE_ZERO 1
+#define LP_TARGET_TYPE_ZERO   1
 
 /* This struct defines an extent entry in the extent table block. */
 typedef struct LpMetadataExtent {

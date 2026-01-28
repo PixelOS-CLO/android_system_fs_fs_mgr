@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/wait.h>
-#include <errno.h>
 #include <cutils/partition_utils.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
 #include <sys/mount.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include <android-base/properties.h>
 #include <android-base/unique_fd.h>

@@ -174,12 +174,10 @@ bool IsSubdir(const std::string& child, const std::string& parent) {
 
     // Remove extraneous "/" at the end.
     std::string_view child_sv = child;
-    while (child_sv != "/" && android::base::ConsumeSuffix(&child_sv, "/"))
-        ;
+    while (child_sv != "/" && android::base::ConsumeSuffix(&child_sv, "/"));
 
     std::string_view parent_sv = parent;
-    while (parent_sv != "/" && android::base::ConsumeSuffix(&parent_sv, "/"))
-        ;
+    while (parent_sv != "/" && android::base::ConsumeSuffix(&parent_sv, "/"));
 
     // IsSubdir(anything, "/") => true
     if (parent_sv == "/") return true;

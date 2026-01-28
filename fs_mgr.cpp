@@ -78,24 +78,24 @@
 #include "blockdev.h"
 #include "fs_mgr_priv.h"
 
-#define E2FSCK_BIN      "/system/bin/e2fsck"
-#define F2FS_FSCK_BIN   "/system/bin/fsck.f2fs"
-#define MKSWAP_BIN      "/system/bin/mkswap"
-#define TUNE2FS_BIN     "/system/bin/tune2fs"
-#define RESIZE2FS_BIN   "/system/bin/resize2fs"
+#define E2FSCK_BIN               "/system/bin/e2fsck"
+#define F2FS_FSCK_BIN            "/system/bin/fsck.f2fs"
+#define MKSWAP_BIN               "/system/bin/mkswap"
+#define TUNE2FS_BIN              "/system/bin/tune2fs"
+#define RESIZE2FS_BIN            "/system/bin/resize2fs"
 
-#define FSCK_LOG_FILE   "/dev/fscklogs/log"
+#define FSCK_LOG_FILE            "/dev/fscklogs/log"
 
-#define ZRAM_CONF_DEV   "/sys/block/zram0/disksize"
-#define ZRAM_CONF_MCS   "/sys/block/zram0/max_comp_streams"
-#define ZRAM_BACK_DEV   "/sys/block/zram0/backing_dev"
+#define ZRAM_CONF_DEV            "/sys/block/zram0/disksize"
+#define ZRAM_CONF_MCS            "/sys/block/zram0/max_comp_streams"
+#define ZRAM_BACK_DEV            "/sys/block/zram0/backing_dev"
 
-#define SYSFS_EXT4_VERITY "/sys/fs/ext4/features/verity"
-#define SYSFS_EXT4_CASEFOLD "/sys/fs/ext4/features/casefold"
+#define SYSFS_EXT4_VERITY        "/sys/fs/ext4/features/verity"
+#define SYSFS_EXT4_CASEFOLD      "/sys/fs/ext4/features/casefold"
 
 #define SYSFS_F2FS_LINEAR_LOOKUP "/sys/fs/f2fs/features/linear_lookup"
 
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(*(a)))
+#define ARRAY_SIZE(a)            (sizeof(a) / sizeof(*(a)))
 
 using android::base::Basename;
 using android::base::GetBoolProperty;
@@ -547,8 +547,8 @@ static void tune_encrypt(const std::string& blk_device, const FstabEntry& entry,
 
     LINFO << "Enabling ext4 flags " << flags << " on " << blk_device;
     if (!run_command(argv, ARRAY_SIZE(argv))) {
-        LERROR << "Failed to run " TUNE2FS_BIN " to enable "
-               << "ext4 flags " << flags << " on " << blk_device;
+        LERROR << "Failed to run " TUNE2FS_BIN " to enable " << "ext4 flags " << flags << " on "
+               << blk_device;
         *fs_stat |= FS_STAT_ENABLE_ENCRYPTION_FAILED;
     }
 }
@@ -584,8 +584,7 @@ static void tune_verity(const std::string& blk_device, const FstabEntry& entry,
 
     const char* argv[] = {TUNE2FS_BIN, "-O", "verity", blk_device.c_str()};
     if (!run_command(argv, ARRAY_SIZE(argv))) {
-        LERROR << "Failed to run " TUNE2FS_BIN " to enable "
-               << "ext4 verity on " << blk_device;
+        LERROR << "Failed to run " TUNE2FS_BIN " to enable " << "ext4 verity on " << blk_device;
         *fs_stat |= FS_STAT_ENABLE_VERITY_FAILED;
     }
 }
@@ -620,8 +619,7 @@ static void tune_casefold(const std::string& blk_device, const FstabEntry& entry
 
     const char* argv[] = {TUNE2FS_BIN, "-O", "casefold", "-E", "encoding=utf8", blk_device.c_str()};
     if (!run_command(argv, ARRAY_SIZE(argv))) {
-        LERROR << "Failed to run " TUNE2FS_BIN " to enable "
-               << "ext4 casefold on " << blk_device;
+        LERROR << "Failed to run " TUNE2FS_BIN " to enable " << "ext4 casefold on " << blk_device;
         *fs_stat |= FS_STAT_ENABLE_CASEFOLD_FAILED;
     }
 }
@@ -659,12 +657,12 @@ static void tune_metadata_csum(const std::string& blk_device, const FstabEntry& 
     const char* resize2fs_args[] = {RESIZE2FS_BIN, "-b", blk_device.c_str()};
 
     if (!run_command(tune2fs_args, ARRAY_SIZE(tune2fs_args))) {
-        LERROR << "Failed to run " TUNE2FS_BIN " to enable "
-               << "ext4 metadata_csum on " << blk_device;
+        LERROR << "Failed to run " TUNE2FS_BIN " to enable " << "ext4 metadata_csum on "
+               << blk_device;
         *fs_stat |= FS_STAT_ENABLE_METADATA_CSUM_FAILED;
     } else if (!run_command(resize2fs_args, ARRAY_SIZE(resize2fs_args))) {
-        LERROR << "Failed to run " RESIZE2FS_BIN " to enable "
-               << "ext4 metadata_csum on " << blk_device;
+        LERROR << "Failed to run " RESIZE2FS_BIN " to enable " << "ext4 metadata_csum on "
+               << blk_device;
         *fs_stat |= FS_STAT_ENABLE_METADATA_CSUM_FAILED;
     }
 }
@@ -1107,8 +1105,7 @@ static bool TranslateExtLabels(FstabEntry* entry) {
 
     struct dirent* ent;
     while ((ent = readdir(blockdir.get()))) {
-        if (ent->d_type != DT_BLK)
-            continue;
+        if (ent->d_type != DT_BLK) continue;
 
         unique_fd fd(TEMP_FAILURE_RETRY(
                 openat(dirfd(blockdir.get()), ent->d_name, O_RDONLY | O_CLOEXEC)));
@@ -1720,7 +1717,6 @@ int fs_mgr_mount_all(Fstab* fstab, int mount_mode) {
             // other than /data
             if (should_use_metadata_encryption(current_entry) &&
                 current_entry.mount_point == "/data") {
-
                 // vdc->Format requires "ro.crypto.type" to set an encryption flag
                 encryptable = FS_MGR_MNTALL_DEV_IS_METADATA_ENCRYPTED;
                 set_type_property(encryptable);
@@ -2043,7 +2039,6 @@ static bool ZramBackingDeviceSizeAvailable(off64_t size) {
 }
 
 static bool PrepareZramBackingDevice(off64_t size) {
-
     constexpr const char* file_path = "/data/per_boot/zram_swap";
     if (size == 0) return true;
 

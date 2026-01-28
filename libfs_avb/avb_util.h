@@ -50,12 +50,13 @@ bool HashtreeDmVeritySetup(FstabEntry* fstab_entry, const FsAvbHashtreeDescripto
 // Searches a Avb hashtree descriptor in vbmeta_images for fstab_entry, to enable dm-verity.
 bool LoadAvbHashtreeToEnableVerity(FstabEntry* fstab_entry, bool wait_for_verity_dev,
                                    const std::vector<VBMetaData>& vbmeta_images,
-                                   const std::string& ab_suffix, const std::string& ab_other_suffix);
+                                   const std::string& ab_suffix,
+                                   const std::string& ab_other_suffix);
 
 // Converts AVB partition name to a device partition name.
-std::string AvbPartitionToDevicePatition(const std::string& avb_partition_name,
-                                         const std::string& ab_suffix,
-                                         const std::string& ab_other_suffix);
+std::string AvbPartitionToDevicePartition(const std::string& avb_partition_name,
+                                          const std::string& ab_suffix,
+                                          const std::string& ab_other_suffix);
 
 // Converts by-name symlink to AVB partition name.
 std::string DeriveAvbPartitionName(const FstabEntry& fstab_entry, const std::string& ab_suffix,
@@ -97,11 +98,11 @@ std::unique_ptr<VBMetaData> LoadAndVerifyVbmetaByPath(
 // The actual device path is constructed at runtime by:
 // partition_name, ab_suffix, ab_other_suffix, and device_path_constructor.
 VBMetaVerifyResult LoadAndVerifyVbmetaByPartition(
-    const std::string& partition_name, const std::string& ab_suffix,
-    const std::string& ab_other_suffix, const std::string& expected_public_key_blob,
-    bool allow_verification_error, bool load_chained_vbmeta, bool rollback_protection,
-    std::function<std::string(const std::string&)> device_path_constructor, bool is_chained_vbmeta,
-    std::vector<VBMetaData>* out_vbmeta_images);
+        const std::string& partition_name, const std::string& ab_suffix,
+        const std::string& ab_other_suffix, const std::string& expected_public_key_blob,
+        bool allow_verification_error, bool load_chained_vbmeta, bool rollback_protection,
+        std::function<std::string(const std::string&)> device_path_constructor,
+        bool is_chained_vbmeta, std::vector<VBMetaData>* out_vbmeta_images);
 
 }  // namespace fs_mgr
 }  // namespace android
