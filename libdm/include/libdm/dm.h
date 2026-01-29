@@ -38,12 +38,12 @@
 #include "dm_table.h"
 
 // The minimum expected device mapper major.minor version
-#define DM_VERSION0 (4)
-#define DM_VERSION1 (0)
-#define DM_VERSION2 (0)
+#define DM_VERSION0   (4)
+#define DM_VERSION1   (0)
+#define DM_VERSION2   (0)
 
 #define DM_ALIGN_MASK (7)
-#define DM_ALIGN(x) (((x) + DM_ALIGN_MASK) & ~DM_ALIGN_MASK)
+#define DM_ALIGN(x)   (((x) + DM_ALIGN_MASK) & ~DM_ALIGN_MASK)
 
 namespace android {
 namespace dm {
@@ -91,7 +91,7 @@ class DeviceMapper final : public IDeviceMapper {
         // only allow creating this with dm_name_list
         DmBlockDevice() = delete;
 
-        explicit DmBlockDevice(struct dm_name_list* d) : name_(d->name), dev_(d->dev){};
+        explicit DmBlockDevice(struct dm_name_list* d) : name_(d->name), dev_(d->dev) {};
 
         // Returs device mapper name associated with the block device
         const std::string& name() const { return name_; }

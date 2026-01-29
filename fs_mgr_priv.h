@@ -25,19 +25,19 @@
 
 #include "libfstab/fstab_priv.h"
 
-#define FS_MGR_TAG "[libfs_mgr] "
+#define FS_MGR_TAG           "[libfs_mgr] "
 
 // Logs a message to kernel
-#define LINFO    LOG(INFO) << FS_MGR_TAG
-#define LWARNING LOG(WARNING) << FS_MGR_TAG
-#define LERROR   LOG(ERROR) << FS_MGR_TAG
-#define LFATAL LOG(FATAL) << FS_MGR_TAG
+#define LINFO                LOG(INFO) << FS_MGR_TAG
+#define LWARNING             LOG(WARNING) << FS_MGR_TAG
+#define LERROR               LOG(ERROR) << FS_MGR_TAG
+#define LFATAL               LOG(FATAL) << FS_MGR_TAG
 
 // Logs a message with strerror(errno) at the end
-#define PINFO    PLOG(INFO) << FS_MGR_TAG
-#define PWARNING PLOG(WARNING) << FS_MGR_TAG
-#define PERROR   PLOG(ERROR) << FS_MGR_TAG
-#define PFATAL PLOG(FATAL) << FS_MGR_TAG
+#define PINFO                PLOG(INFO) << FS_MGR_TAG
+#define PWARNING             PLOG(WARNING) << FS_MGR_TAG
+#define PERROR               PLOG(ERROR) << FS_MGR_TAG
+#define PFATAL               PLOG(FATAL) << FS_MGR_TAG
 
 #define CRYPTO_TMPFS_OPTIONS "size=512m,mode=0771,uid=1000,gid=1000"
 
@@ -76,7 +76,7 @@
  *
  */
 
-#define DM_BUF_SIZE 4096
+#define DM_BUF_SIZE          4096
 
 using namespace std::chrono_literals;
 

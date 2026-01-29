@@ -194,7 +194,9 @@ TEST_F(FiemapWriterTest, CheckFileExtents) {
 
 TEST_F(FiemapWriterTest, ExistingFile) {
     // Create the file.
-    { ASSERT_NE(FiemapWriter::Open(testfile, gBlockSize), nullptr); }
+    {
+        ASSERT_NE(FiemapWriter::Open(testfile, gBlockSize), nullptr);
+    }
     // Test that we can still open it.
     {
         auto ptr = FiemapWriter::Open(testfile, 0, false);
@@ -550,9 +552,8 @@ class FsTest : public ::testing::Test {
                 ::android::base::StringPrintf("/system/bin/dd if=/dev/zero of=%s bs=%" PRIu64
                                               " count=%" PRIu64 " > /dev/null 2>&1",
                                               fs_path_.c_str(), block_size_, count);
-        std::string mkfs_cmd =
-                ::android::base::StringPrintf("/system/bin/make_f2fs -q %s -b %" PRIu64,
-                                              fs_path_.c_str(), block_size_);
+        std::string mkfs_cmd = ::android::base::StringPrintf(
+                "/system/bin/make_f2fs -q %s -b %" PRIu64, fs_path_.c_str(), block_size_);
         // create mount point
         ASSERT_EQ(mkdir(mntpoint_.c_str(), S_IRWXU), 0);
         // create file for the file system

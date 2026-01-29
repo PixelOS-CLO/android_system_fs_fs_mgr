@@ -59,7 +59,7 @@ using namespace android::storage_literals;
 static constexpr size_t PAYLOAD_BUFFER_SZ = (1UL << 20);
 static_assert(PAYLOAD_BUFFER_SZ >= BLOCK_SZ);
 
-#define SNAP_LOG(level) LOG(level) << misc_name_ << ": "
+#define SNAP_LOG(level)  LOG(level) << misc_name_ << ": "
 #define SNAP_PLOG(level) PLOG(level) << misc_name_ << ": "
 
 enum class MERGE_IO_TRANSITION {

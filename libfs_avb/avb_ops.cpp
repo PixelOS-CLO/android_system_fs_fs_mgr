@@ -56,8 +56,8 @@ static AvbIOResult read_from_partition(AvbOps* ops, const char* partition, int64
 }
 
 static AvbIOResult no_op_read_rollback_index(AvbOps* ops ATTRIBUTE_UNUSED,
-                                            size_t rollback_index_location ATTRIBUTE_UNUSED,
-                                            uint64_t* out_rollback_index) {
+                                             size_t rollback_index_location ATTRIBUTE_UNUSED,
+                                             uint64_t* out_rollback_index) {
     // rollback_index has been checked in bootloader phase.
     // In user-space, returns the smallest value 0 to pass the check.
     *out_rollback_index = 0;
@@ -80,7 +80,7 @@ static AvbIOResult no_op_validate_vbmeta_public_key(
 }
 
 static AvbIOResult no_op_read_is_device_unlocked(AvbOps* ops ATTRIBUTE_UNUSED,
-                                                bool* out_is_unlocked) {
+                                                 bool* out_is_unlocked) {
     // The function is for bootloader to update the value into
     // androidboot.vbmeta.device_state in kernel cmdline.
     // In user-space, returns true as we don't need to update it anymore.
@@ -89,8 +89,8 @@ static AvbIOResult no_op_read_is_device_unlocked(AvbOps* ops ATTRIBUTE_UNUSED,
 }
 
 static AvbIOResult no_op_get_unique_guid_for_partition(AvbOps* ops ATTRIBUTE_UNUSED,
-                                                      const char* partition ATTRIBUTE_UNUSED,
-                                                      char* guid_buf, size_t guid_buf_size) {
+                                                       const char* partition ATTRIBUTE_UNUSED,
+                                                       char* guid_buf, size_t guid_buf_size) {
     // The function is for bootloader to set the correct UUID
     // for a given partition in kernel cmdline.
     // In user-space, returns a faking one as we don't need to update

@@ -15,11 +15,11 @@
  *
  */
 
-#include <functional>
 #include <fuzzer/FuzzedDataProvider.h>
 #include <liblp/builder.h>
 #include <liblp/property_fetcher.h>
 #include <storage_literals/storage_literals.h>
+#include <functional>
 
 using namespace android::fs_mgr;
 using namespace std;
@@ -64,7 +64,7 @@ const string kDefaultGroupName = "default";
 
 class BuilderFuzzer {
   public:
-    BuilderFuzzer(const uint8_t* data, size_t size) : mFdp(data, size){};
+    BuilderFuzzer(const uint8_t* data, size_t size) : mFdp(data, size) {};
     void process();
 
   private:

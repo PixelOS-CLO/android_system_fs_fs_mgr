@@ -34,10 +34,10 @@ namespace fs_avb_host_test {
 
 class PublicFsAvbTest : public BaseFsAvbTest {
   public:
-    PublicFsAvbTest(){};
+    PublicFsAvbTest() {};
 
   protected:
-    ~PublicFsAvbTest(){};
+    ~PublicFsAvbTest() {};
     // Modifies |flags| field in the vbmeta header in an Avb image.
     // e.g., AVB_VBMETA_IMAGE_FLAGS_VERIFICATION_DISABLED.
     void ModifyVBMetaHeaderFlags(const base::FilePath& vbmeta_image_path, uint32_t flags);

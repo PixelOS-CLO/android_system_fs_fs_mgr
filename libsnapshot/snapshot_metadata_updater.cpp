@@ -64,7 +64,6 @@ SnapshotMetadataUpdater::SnapshotMetadataUpdater(MetadataBuilder* builder, uint3
                                                std::string(it->second) + target_suffix_, &p});
         }
     }
-
 }
 
 bool SnapshotMetadataUpdater::ShrinkPartitions() const {

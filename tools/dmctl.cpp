@@ -143,8 +143,6 @@ class TargetParser final {
             std::string block_device = NextArg();
             return std::make_unique<DmTargetBow>(start_sector, num_sectors, block_device);
 
-
-
         } else if (target_type == "user") {
             if (!HasArgs(1)) {
                 std::cerr << "Expected \"user\" <control_device_name>" << std::endl;

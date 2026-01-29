@@ -66,7 +66,7 @@ bool CowWriterBase::InitFd() {
         return true;
     }
 
-    struct stat stat {};
+    struct stat stat{};
     if (fstat(fd_.get(), &stat) < 0) {
         PLOG(ERROR) << "fstat failed";
         return false;

@@ -19,8 +19,8 @@
 #include <stdlib.h>
 
 #include <android-base/file.h>
-#include <android-base/strings.h>
 #include <android-base/stringprintf.h>
+#include <android-base/strings.h>
 #include <base/files/file_util.h>
 
 namespace fs_avb_host_test {
