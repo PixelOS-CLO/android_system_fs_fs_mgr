@@ -26,6 +26,7 @@
 using android::dm::kSectorSize;
 using android::fs_mgr::Extent;
 using android::fs_mgr::Interval;
+using android::fs_mgr::kDefaultBlockSize;
 using android::fs_mgr::Partition;
 using chromeos_update_engine::InstallOperation;
 template <typename T>
