@@ -209,6 +209,9 @@ class ISnapshotManager {
     // UpdateState is None, or no snapshots have been created.
     virtual bool UpdateUsesSnapuserd() = 0;
 
+    // Returns true if userspace snapshots is enabled for the current update.
+    virtual bool UpdateUsesUserSnapshots() = 0;
+
     // Create necessary COW device / files for OTA clients. New logical partitions will be added to
     // group "cow" in target_metadata. Regions of partitions of current_metadata will be
     // "write-protected" and snapshotted.
@@ -378,6 +381,7 @@ class SnapshotManager final : public ISnapshotManager {
                                    const std::function<bool()>& before_cancel = {}) override;
     UpdateState GetUpdateState(double* progress = nullptr) override;
     bool UpdateUsesSnapuserd() override;
+    bool UpdateUsesUserSnapshots() override;
     Return CreateUpdateSnapshots(const DeltaArchiveManifest& manifest) override;
     bool MapUpdateSnapshot(const CreateLogicalPartitionParams& params,
                            std::string* snapshot_path) override;
@@ -680,7 +684,8 @@ class SnapshotManager final : public ISnapshotManager {
     // Internal callback for when merging is complete.
     bool OnSnapshotMergeComplete(LockedFile* lock, const std::string& name,
                                  const SnapshotStatus& status);
-    bool CollapseSnapshotDevice(const std::string& name, const SnapshotStatus& status);
+    bool CollapseSnapshotDevice(LockedFile* lock, const std::string& name,
+                                const SnapshotStatus& status);
 
     struct [[nodiscard]] MergeResult {
         explicit MergeResult(UpdateState state,
@@ -779,6 +784,9 @@ class SnapshotManager final : public ISnapshotManager {
     // Unmap a dm-user device through snapuserd.
     bool UnmapDmUserDevice(const std::string& dm_user_name);
 
+    // Unmap a dm-user device for user space snapshots
+    bool UnmapUserspaceSnapshotDevice(LockedFile* lock, const std::string& snapshot_name);
+
     CancelResult TryCancelUpdate();
     CancelResult IsCancelUpdateSafe(UpdateState state);
 
@@ -860,6 +868,10 @@ class SnapshotManager final : public ISnapshotManager {
     // Helper of UpdateUsesSnapuserd
     bool UpdateUsesSnapuserd(LockedFile* lock);
 
+    // Locked and unlocked functions to test whether the current update uses
+    // userspace snapshots.
+    bool UpdateUsesUserSnapshots(LockedFile* lock);
+
     // Check if io_uring API's need to be used
     bool UpdateUsesIouring(LockedFile* lock);
 
@@ -902,6 +914,7 @@ class SnapshotManager final : public ISnapshotManager {
     std::function<bool(const std::string&)> uevent_regen_callback_;
     std::unique_ptr<SnapuserdClient> snapuserd_client_;
     std::unique_ptr<LpMetadata> old_partition_metadata_;
+    std::optional<bool> is_snapshot_userspace_;
     std::optional<bool> is_snapshot_ublk_;
 };
 
