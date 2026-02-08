@@ -52,9 +52,9 @@ bool CowParserV3::Parse(borrowed_fd fd, const CowHeaderV3& header, std::optional
     if (header_.prefix.major_version != 3 || header_.prefix.minor_version != 0) {
         LOG(ERROR) << "Header version mismatch, "
                    << "major version: " << header_.prefix.major_version
-                   << ", expected: " << kCowVersionMajor
+                   << ", expected: " << 3
                    << ", minor version: " << header_.prefix.minor_version
-                   << ", expected: " << kCowVersionMinor;
+                   << ", expected: " << 0;
         return false;
     }
 
