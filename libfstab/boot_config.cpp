@@ -30,7 +30,7 @@ namespace fs_mgr {
 
 const std::string& GetAndroidDtDir() {
     // Set once and saves time for subsequent calls to this function
-    static const std::string kAndroidDtDir = [] {
+    [[clang::no_destroy]] static const std::string kAndroidDtDir = [] {
         std::string android_dt_dir;
         if ((GetBootconfig("androidboot.android_dt_dir", &android_dt_dir) ||
              GetKernelCmdline("androidboot.android_dt_dir", &android_dt_dir)) &&

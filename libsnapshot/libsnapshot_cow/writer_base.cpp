@@ -160,7 +160,7 @@ bool CowWriterBase::ValidateNewBlock(uint64_t new_block) {
     return true;
 }
 
-std::unique_ptr<ICowReader> CowWriterBase::OpenReader() {
+std::unique_ptr<ICowReader> CowWriterBase::OpenReader(bool is_merge) {
     unique_fd cow_fd(fcntl(fd_.get(), F_DUPFD | F_DUPFD_CLOEXEC, 0));
     if (cow_fd < 0) {
         PLOG(ERROR) << "CowWriterV2::OpenReander: dup COW device";
@@ -168,7 +168,7 @@ std::unique_ptr<ICowReader> CowWriterBase::OpenReader() {
     }
 
     auto cow = std::make_unique<CowReader>();
-    if (!cow->Parse(std::move(cow_fd))) {
+    if (!cow->Parse(std::move(cow_fd), {}, is_merge)) {
         LOG(ERROR) << "CowWriterV2::OpenReader: unable to read COW";
         return nullptr;
     }
@@ -177,7 +177,7 @@ std::unique_ptr<ICowReader> CowWriterBase::OpenReader() {
 
 std::unique_ptr<chromeos_update_engine::FileDescriptor> CowWriterBase::OpenFileDescriptor(
         const std::optional<std::string>& source_device) {
-    auto reader = OpenReader();
+    auto reader = OpenReader(false);
     if (!reader) {
         return nullptr;
     }

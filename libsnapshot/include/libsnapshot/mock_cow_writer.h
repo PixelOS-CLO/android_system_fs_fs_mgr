@@ -36,7 +36,7 @@ class MockCowWriter : public ICowWriter {
     MOCK_METHOD(uint32_t, GetBlockSize, (), (override, const));
     MOCK_METHOD(std::optional<uint32_t>, GetMaxBlocks, (), (override, const));
 
-    MOCK_METHOD(std::unique_ptr<ICowReader>, OpenReader, (), (override));
+    MOCK_METHOD(std::unique_ptr<ICowReader>, OpenReader, (bool), (override));
     MOCK_METHOD(std::unique_ptr<FileDescriptor>, OpenFileDescriptor,
                 (const std::optional<std::string>&), (override));
 };

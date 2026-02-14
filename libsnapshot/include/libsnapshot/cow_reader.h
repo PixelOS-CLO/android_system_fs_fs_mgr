@@ -120,8 +120,10 @@ class CowReader final : public ICowReader {
 
     // Parse the COW, optionally, up to the given label. If no label is
     // specified, the COW must have an intact footer.
-    bool Parse(android::base::unique_fd&& fd, std::optional<uint64_t> label = {});
-    bool Parse(android::base::borrowed_fd fd, std::optional<uint64_t> label = {});
+    bool Parse(android::base::unique_fd&& fd, std::optional<uint64_t> label = {},
+               bool is_merge = true);
+    bool Parse(android::base::borrowed_fd fd, std::optional<uint64_t> label = {},
+               bool is_merge = true);
 
     bool InitForMerge(android::base::unique_fd&& fd);
 
@@ -140,6 +142,7 @@ class CowReader final : public ICowReader {
 
     ssize_t ReadData(const CowOperation* op, void* buffer, size_t buffer_size,
                      size_t ignore_bytes = 0) override;
+    ssize_t ReadData(uint64_t offset, void* buffer, size_t buffer_size, size_t ignore_bytes = 0);
 
     CowHeader& GetHeader() override { return header_; }
     const CowHeaderV3& header_v3() const { return header_; }
