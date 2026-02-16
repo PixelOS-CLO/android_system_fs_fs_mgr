@@ -56,7 +56,7 @@ DeviceMapper::DeviceMapper() : fd_(-1) {
 }
 
 DeviceMapper& DeviceMapper::Instance() {
-    static DeviceMapper instance;
+    [[clang::no_destroy]] static DeviceMapper instance;
     return instance;
 }
 

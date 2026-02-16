@@ -44,7 +44,7 @@ class CowWriterBase : public ICowWriter {
     bool AddSequenceData(size_t num_ops, const uint32_t* data) override;
     uint32_t GetBlockSize() const override { return options_.block_size; }
     std::optional<uint32_t> GetMaxBlocks() const override { return options_.max_blocks; }
-    std::unique_ptr<ICowReader> OpenReader() override;
+    std::unique_ptr<ICowReader> OpenReader(bool is_merge) override;
     std::unique_ptr<FileDescriptor> OpenFileDescriptor(
             const std::optional<std::string>& source_device) override;
 
