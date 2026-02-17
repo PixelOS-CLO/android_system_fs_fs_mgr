@@ -27,12 +27,12 @@ using namespace std;
 using namespace android::storage_literals;
 using namespace android::fs_mgr;
 using namespace android::fs_mgr::testing;
+using android::base::GetProperty;
 using ::testing::_;
 using ::testing::AnyNumber;
 using ::testing::ElementsAre;
 using ::testing::NiceMock;
 using ::testing::Return;
-using android::base::GetProperty;
 
 class Environment : public ::testing::Environment {
   public:

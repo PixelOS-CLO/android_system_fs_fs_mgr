@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/wait.h>
-#include <errno.h>
 #include <cutils/partition_utils.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
 #include <sys/mount.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include <android-base/properties.h>
 #include <android-base/unique_fd.h>
@@ -158,6 +158,11 @@ static int format_f2fs(const std::string& fs_blkdev, uint64_t dev_sz, bool needs
         args.push_back("-O");
         args.push_back("extra_attr");
     }
+    if (android::base::GetBoolProperty("external_storage.packedssa.enabled", false)) {
+        args.push_back("-O");
+        args.push_back("packed_ssa");
+    }
+
     args.push_back("-w");
     args.push_back(block_size.c_str());
     args.push_back("-b");

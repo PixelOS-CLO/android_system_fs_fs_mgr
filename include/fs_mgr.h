@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include <stdio.h>
-#include <stdint.h>
-#include <stdbool.h>
 #include <linux/dm-ioctl.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
 
 #include <functional>
 #include <optional>
@@ -28,11 +28,11 @@
 #include <fstab/fstab.h>
 
 // Magic number at start of verity metadata
-#define VERITY_METADATA_MAGIC_NUMBER 0xb001b001
+#define VERITY_METADATA_MAGIC_NUMBER  0xb001b001
 
 // Replacement magic number at start of verity metadata to cleanly
 // turn verity off in userdebug builds.
-#define VERITY_METADATA_MAGIC_DISABLE 0x46464f56 // "VOFF"
+#define VERITY_METADATA_MAGIC_DISABLE 0x46464f56  // "VOFF"
 
 // Verity modes
 enum verity_mode {
@@ -53,12 +53,12 @@ enum mount_mode {
 };
 
 #define FS_MGR_MNTALL_DEV_NEEDS_RECOVERY_WIPE_PROMPT 8
-#define FS_MGR_MNTALL_DEV_IS_METADATA_ENCRYPTED 7
+#define FS_MGR_MNTALL_DEV_IS_METADATA_ENCRYPTED     7
 #define FS_MGR_MNTALL_DEV_NEEDS_METADATA_ENCRYPTION 6
-#define FS_MGR_MNTALL_DEV_FILE_ENCRYPTED 5
-#define FS_MGR_MNTALL_DEV_NEEDS_RECOVERY 4
-#define FS_MGR_MNTALL_DEV_NOT_ENCRYPTABLE 0
-#define FS_MGR_MNTALL_FAIL (-1)
+#define FS_MGR_MNTALL_DEV_FILE_ENCRYPTED            5
+#define FS_MGR_MNTALL_DEV_NEEDS_RECOVERY            4
+#define FS_MGR_MNTALL_DEV_NOT_ENCRYPTABLE           0
+#define FS_MGR_MNTALL_FAIL                          (-1)
 // fs_mgr_mount_all() updates fstab entries that reference device-mapper.
 int fs_mgr_mount_all(android::fs_mgr::Fstab* fstab, int mount_mode);
 
@@ -71,8 +71,8 @@ struct HashtreeInfo {
     bool check_at_most_once;
 };
 
-#define FS_MGR_DOMNT_FAILED (-1)
-#define FS_MGR_DOMNT_BUSY (-2)
+#define FS_MGR_DOMNT_FAILED  (-1)
+#define FS_MGR_DOMNT_BUSY    (-2)
 #define FS_MGR_DOMNT_SUCCESS 0
 int fs_mgr_do_mount(android::fs_mgr::Fstab* fstab, const std::string& n_name,
                     const std::string& n_blk_device, int needs_checkpoint, bool needs_encrypt);
@@ -96,8 +96,8 @@ int fs_mgr_do_format(const android::fs_mgr::FstabEntry& entry);
 
 #define FS_MGR_SETUP_VERITY_SKIPPED  (-3)
 #define FS_MGR_SETUP_VERITY_DISABLED (-2)
-#define FS_MGR_SETUP_VERITY_FAIL (-1)
-#define FS_MGR_SETUP_VERITY_SUCCESS 0
+#define FS_MGR_SETUP_VERITY_FAIL     (-1)
+#define FS_MGR_SETUP_VERITY_SUCCESS  0
 int fs_mgr_setup_verity(android::fs_mgr::FstabEntry* fstab, bool wait_for_verity_dev);
 
 // Return the name of the super partition if it exists.

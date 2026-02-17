@@ -28,7 +28,7 @@
 #include "fs_avb_test_util.h"
 
 // Target classes or functions to test:
-using android::fs_mgr::AvbPartitionToDevicePatition;
+using android::fs_mgr::AvbPartitionToDevicePartition;
 using android::fs_mgr::DeriveAvbPartitionName;
 using android::fs_mgr::FstabEntry;
 using android::fs_mgr::GetAvbFooter;
@@ -47,10 +47,10 @@ namespace fs_avb_host_test {
 
 class AvbUtilTest : public BaseFsAvbTest {
   public:
-    AvbUtilTest(){};
+    AvbUtilTest() {};
 
   protected:
-    ~AvbUtilTest(){};
+    ~AvbUtilTest() {};
     // Helper function for VerifyVBMetaSignature test. Modifies vbmeta.data()
     // in a number of places at |offset| of size |length| and checks that
     // VerifyVBMetaSignature() returns |expected_result|.
@@ -70,8 +70,7 @@ void AvbUtilTest::SetVBMetaFlags(const base::FilePath& image_path, uint32_t flag
     if (!base::PathExists(image_path)) return;
 
     std::string image_file_name = image_path.RemoveExtension().BaseName().value();
-    bool is_vbmeta_partition =
-        android::base::StartsWithIgnoreCase(image_file_name, "vbmeta");
+    bool is_vbmeta_partition = android::base::StartsWithIgnoreCase(image_file_name, "vbmeta");
 
     android::base::unique_fd fd(open(image_path.value().c_str(), O_RDWR | O_CLOEXEC));
     EXPECT_TRUE(fd > 0);
@@ -89,15 +88,15 @@ void AvbUtilTest::SetVBMetaFlags(const base::FilePath& image_path, uint32_t flag
     EXPECT_EQ(sizeof flags_data, write(fd, &flags_data, sizeof flags_data));
 }
 
-TEST_F(AvbUtilTest, AvbPartitionToDevicePatition) {
-    EXPECT_EQ("system", AvbPartitionToDevicePatition("system", "", ""));
-    EXPECT_EQ("system", AvbPartitionToDevicePatition("system", "", "_b"));
+TEST_F(AvbUtilTest, AvbPartitionToDevicePartition) {
+    EXPECT_EQ("system", AvbPartitionToDevicePartition("system", "", ""));
+    EXPECT_EQ("system", AvbPartitionToDevicePartition("system", "", "_b"));
 
-    EXPECT_EQ("system_a", AvbPartitionToDevicePatition("system", "_a", ""));
-    EXPECT_EQ("system_a", AvbPartitionToDevicePatition("system", "_a", "_b"));
+    EXPECT_EQ("system_a", AvbPartitionToDevicePartition("system", "_a", ""));
+    EXPECT_EQ("system_a", AvbPartitionToDevicePartition("system", "_a", "_b"));
 
-    EXPECT_EQ("system_b", AvbPartitionToDevicePatition("system_other", "", "_b"));
-    EXPECT_EQ("system_b", AvbPartitionToDevicePatition("system_other", "_a", "_b"));
+    EXPECT_EQ("system_b", AvbPartitionToDevicePartition("system_other", "", "_b"));
+    EXPECT_EQ("system_b", AvbPartitionToDevicePartition("system_other", "_a", "_b"));
 }
 
 TEST_F(AvbUtilTest, DeriveAvbPartitionName) {
@@ -1055,13 +1054,13 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPathErrorVerification) {
     size_t header_block_offset = 0;
     size_t authentication_block_offset = header_block_offset + sizeof(AvbVBMetaImageHeader);
     size_t auxiliary_block_offset =
-        authentication_block_offset + system_header->authentication_data_block_size;
+            authentication_block_offset + system_header->authentication_data_block_size;
 
     // Modifies the hash.
-    ModifyFile(
-        system_path,
-        (system_footer->vbmeta_offset + authentication_block_offset + system_header->hash_offset),
-        system_header->hash_size);
+    ModifyFile(system_path,
+               (system_footer->vbmeta_offset + authentication_block_offset +
+                system_header->hash_offset),
+               system_header->hash_size);
 
     VBMetaVerifyResult verify_result;
     // Not allow verification error.
@@ -1178,7 +1177,7 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPathVerificationDisabled) {
                  "--internal_release_string \"unit test\"");
 
     base::FilePath rsa4096_public_key =
-        ExtractPublicKeyAvb(data_dir_.Append("testkey_rsa4096.pem"));
+            ExtractPublicKeyAvb(data_dir_.Append("testkey_rsa4096.pem"));
 
     std::string expected_key_blob_4096;
     EXPECT_TRUE(base::ReadFileToString(rsa4096_public_key, &expected_key_blob_4096));
@@ -1265,10 +1264,10 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartition) {
 
     EXPECT_EQ(VBMetaVerifyResult::kSuccess,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
-                  "" /* expected_public_key_blob*/, false /* allow_verification_error */,
-                  true /* load_chained_vbmeta */, true /* rollback_protection */, vbmeta_image_path,
-                  false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
+                      "" /* expected_public_key_blob*/, false /* allow_verification_error */,
+                      true /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
 
     EXPECT_EQ(4UL, vbmeta_images.size());  // vbmeta, boot, vbmeta_system and system
     // Binary comparison for each vbmeta image.
@@ -1281,10 +1280,10 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartition) {
     vbmeta_images.clear();
     EXPECT_EQ(VBMetaVerifyResult::kSuccess,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
-                  "" /* expected_public_key_blob*/, false /* allow_verification_error */,
-                  false /* load_chained_vbmeta */, true /* rollback_protection */,
-                  vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
+                      "" /* expected_public_key_blob*/, false /* allow_verification_error */,
+                      false /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
     // Only vbmeta is loaded.
     EXPECT_EQ(1UL, vbmeta_images.size());
     EXPECT_TRUE(CompareVBMeta(vbmeta_path, vbmeta_images[0]));
@@ -1344,10 +1343,10 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionWithSuffixes) {
     std::vector<VBMetaData> vbmeta_images;
     EXPECT_EQ(VBMetaVerifyResult::kSuccess,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "_a" /* ab_suffix */, "_b" /* other_suffix */,
-                  "" /* expected_public_key_blob*/, false /* allow_verification_error */,
-                  true /* load_chained_vbmeta */, true /* rollback_protection */, vbmeta_image_path,
-                  false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "_a" /* ab_suffix */, "_b" /* other_suffix */,
+                      "" /* expected_public_key_blob*/, false /* allow_verification_error */,
+                      true /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
 
     EXPECT_EQ(4UL, vbmeta_images.size());  // vbmeta, boot_other, vbmeta_system_other and system
     // Binary comparison for each vbmeta image.
@@ -1360,10 +1359,10 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionWithSuffixes) {
     vbmeta_images.clear();
     EXPECT_EQ(VBMetaVerifyResult::kSuccess,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "_a" /* ab_suffix */, "_b" /* other_suffix */,
-                  "" /* expected_public_key_blob*/, false /* allow_verification_error */,
-                  false /* load_chained_vbmeta */, true /* rollback_protection */,
-                  vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "_a" /* ab_suffix */, "_b" /* other_suffix */,
+                      "" /* expected_public_key_blob*/, false /* allow_verification_error */,
+                      false /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
     // Only vbmeta is loaded.
     EXPECT_EQ(1UL, vbmeta_images.size());
     EXPECT_TRUE(CompareVBMeta(vbmeta_path, vbmeta_images[0]));
@@ -1371,11 +1370,11 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionWithSuffixes) {
     // Using an invalid suffix for 'other' slot, checks it returns error.
     EXPECT_EQ(VBMetaVerifyResult::kError,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "_a" /* ab_suffix */,
-                  "_invalid_suffix" /* other_suffix */, "" /* expected_public_key_blob*/,
-                  false /* allow_verification_error */, true /* load_chained_vbmeta */,
-                  true /* rollback_protection */, vbmeta_image_path, false /* is_chained_vbmeta*/,
-                  &vbmeta_images));
+                      "vbmeta" /* partition_name */, "_a" /* ab_suffix */,
+                      "_invalid_suffix" /* other_suffix */, "" /* expected_public_key_blob*/,
+                      false /* allow_verification_error */, true /* load_chained_vbmeta */,
+                      true /* rollback_protection */, vbmeta_image_path,
+                      false /* is_chained_vbmeta*/, &vbmeta_images));
 }
 
 TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionErrorVerification) {
@@ -1433,20 +1432,20 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionErrorVerification) {
     };
     EXPECT_EQ(VBMetaVerifyResult::kError,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
-                  "" /* expected_public_key_blob*/, false /* allow_verification_error */,
-                  true /* load_chained_vbmeta */, true /* rollback_protection */, vbmeta_image_path,
-                  false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
+                      "" /* expected_public_key_blob*/, false /* allow_verification_error */,
+                      true /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
     // Stops to load vbmeta because the top-level vbmeta has verification error.
     EXPECT_EQ(0UL, vbmeta_images.size());
 
     // Tries again with verification error allowed.
     EXPECT_EQ(VBMetaVerifyResult::kErrorVerification,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "", /* other_suffix */
-                  "" /* expected_public_key_blob*/, true /* allow_verification_error */,
-                  true /* load_chained_vbmeta */, true /* rollback_protection */, vbmeta_image_path,
-                  false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "", /* other_suffix */
+                      "" /* expected_public_key_blob*/, true /* allow_verification_error */,
+                      true /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
 
     EXPECT_EQ(3UL, vbmeta_images.size());  // vbmeta, boot, and system
     // Binary comparison for each vbmeta image.
@@ -1471,10 +1470,10 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionErrorVerification) {
     vbmeta_images.clear();
     EXPECT_EQ(VBMetaVerifyResult::kError,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
-                  "" /* expected_public_key_blob*/, false /* allow_verification_error */,
-                  true /* load_chained_vbmeta */, true /* rollback_protection */, vbmeta_image_path,
-                  false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
+                      "" /* expected_public_key_blob*/, false /* allow_verification_error */,
+                      true /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
     // 'vbmeta', 'boot' but no 'system', because of verification error.
     EXPECT_EQ(2UL, vbmeta_images.size());
     // Binary comparison for the loaded 'vbmeta' and 'boot'.
@@ -1489,10 +1488,10 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionErrorVerification) {
                sizeof(uint32_t));
     EXPECT_EQ(VBMetaVerifyResult::kError,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
-                  "" /* expected_public_key_blob*/, true /* allow_verification_error */,
-                  true /* load_chained_vbmeta */, true /* rollback_protection */, vbmeta_image_path,
-                  false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
+                      "" /* expected_public_key_blob*/, true /* allow_verification_error */,
+                      true /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
 }
 
 TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionVerificationDisabled) {
@@ -1517,15 +1516,15 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionVerificationDisabled) {
 
     // Generates chain partition descriptors.
     base::FilePath rsa2048_public_key =
-        ExtractPublicKeyAvb(data_dir_.Append("testkey_rsa2048.pem"));
+            ExtractPublicKeyAvb(data_dir_.Append("testkey_rsa2048.pem"));
     base::FilePath rsa4096_public_key =
-        ExtractPublicKeyAvb(data_dir_.Append("testkey_rsa4096.pem"));
+            ExtractPublicKeyAvb(data_dir_.Append("testkey_rsa4096.pem"));
     // Makes a vbmeta_system.img including the 'system' chained descriptor.
     auto vbmeta_system_path = GenerateVBMetaImage(
-        "vbmeta_system.img", "SHA256_RSA4096", 0, data_dir_.Append("testkey_rsa4096.pem"),
-        {},                                  /* include_descriptor_image_paths */
-        {{"system", 3, rsa4096_public_key}}, /* chain_partitions */
-        "--internal_release_string \"unit test\"");
+            "vbmeta_system.img", "SHA256_RSA4096", 0, data_dir_.Append("testkey_rsa4096.pem"),
+            {},                                  /* include_descriptor_image_paths */
+            {{"system", 3, rsa4096_public_key}}, /* chain_partitions */
+            "--internal_release_string \"unit test\"");
 
     // Makes a vbmeta image includeing 'boot' and 'vbmeta_system' chained descriptors.
     auto vbmeta_path = GenerateVBMetaImage("vbmeta.img", "SHA256_RSA8192", 0,
@@ -1547,10 +1546,10 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionVerificationDisabled) {
 
     EXPECT_EQ(VBMetaVerifyResult::kSuccess,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
-                  "" /* expected_public_key_blob*/, false /* allow_verification_error */,
-                  true /* load_chained_vbmeta */, true /* rollback_protection */, vbmeta_image_path,
-                  false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
+                      "" /* expected_public_key_blob*/, false /* allow_verification_error */,
+                      true /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
 
     EXPECT_EQ(4UL, vbmeta_images.size());  // vbmeta, boot, vbmeta_system and system
     // Binary comparison for each vbmeta image.
@@ -1564,10 +1563,10 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionVerificationDisabled) {
     vbmeta_images.clear();
     EXPECT_EQ(VBMetaVerifyResult::kErrorVerification,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
-                  "" /* expected_public_key_blob*/, true /* allow_verification_error */,
-                  true /* load_chained_vbmeta */, true /* rollback_protection */, vbmeta_image_path,
-                  false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
+                      "" /* expected_public_key_blob*/, true /* allow_verification_error */,
+                      true /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
     EXPECT_EQ(1UL, vbmeta_images.size());  // Only vbmeta is loaded
     EXPECT_TRUE(CompareVBMeta(vbmeta_path, vbmeta_images[0]));
 
@@ -1576,10 +1575,10 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionVerificationDisabled) {
     vbmeta_images.clear();
     EXPECT_EQ(VBMetaVerifyResult::kErrorVerification,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
-                  "" /* expected_public_key_blob*/, true /* allow_verification_error */,
-                  true /* load_chained_vbmeta */, true /* rollback_protection */, vbmeta_image_path,
-                  false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
+                      "" /* expected_public_key_blob*/, true /* allow_verification_error */,
+                      true /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
     EXPECT_EQ(4UL, vbmeta_images.size());  // vbmeta, boot, vbmeta_system and system
     // Binary comparison for each vbmeta image.
     EXPECT_TRUE(CompareVBMeta(vbmeta_path, vbmeta_images[0]));
@@ -1616,28 +1615,28 @@ TEST_F(AvbUtilTest, LoadAndVerifyVbmetaByPartitionUnexpectedPublicKey) {
     // Uses the correct expected public key.
     EXPECT_EQ(VBMetaVerifyResult::kSuccess,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
-                  expected_key_blob_8192, true /* allow_verification_error */,
-                  false /* load_chained_vbmeta */, true /* rollback_protection */,
-                  vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
+                      expected_key_blob_8192, true /* allow_verification_error */,
+                      false /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
 
     // Uses the wrong expected public key with allow_verification_error set to true.
     vbmeta_images.clear();
     EXPECT_EQ(VBMetaVerifyResult::kErrorVerification,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
-                  expected_key_blob_4096, true /* allow_verification_error */,
-                  false /* load_chained_vbmeta */, true /* rollback_protection */,
-                  vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
+                      expected_key_blob_4096, true /* allow_verification_error */,
+                      false /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
 
     // Uses the wrong expected public key with allow_verification_error set to false.
     vbmeta_images.clear();
     EXPECT_EQ(VBMetaVerifyResult::kError,
               LoadAndVerifyVbmetaByPartition(
-                  "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
-                  expected_key_blob_4096, false /* allow_verification_error */,
-                  false /* load_chained_vbmeta */, true /* rollback_protection */,
-                  vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
+                      "vbmeta" /* partition_name */, "" /* ab_suffix */, "" /* other_suffix */,
+                      expected_key_blob_4096, false /* allow_verification_error */,
+                      false /* load_chained_vbmeta */, true /* rollback_protection */,
+                      vbmeta_image_path, false /* is_chained_vbmeta*/, &vbmeta_images));
 }
 
 }  // namespace fs_avb_host_test

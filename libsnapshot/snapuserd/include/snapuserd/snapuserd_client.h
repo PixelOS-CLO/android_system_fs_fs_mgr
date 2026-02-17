@@ -45,7 +45,7 @@ class SnapuserdClient {
 
   public:
     explicit SnapuserdClient(android::base::unique_fd&& sockfd);
-    SnapuserdClient(){};
+    SnapuserdClient() {};
 
     void WaitForServiceToTerminate(std::chrono::milliseconds timeout_ms);
 

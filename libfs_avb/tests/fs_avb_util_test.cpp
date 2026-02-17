@@ -22,10 +22,10 @@ namespace fs_avb_host_test {
 
 class PublicFsAvbUtilTest : public BaseFsAvbTest {
   public:
-    PublicFsAvbUtilTest(){};
+    PublicFsAvbUtilTest() {};
 
   protected:
-    ~PublicFsAvbUtilTest(){};
+    ~PublicFsAvbUtilTest() {};
 };
 
 TEST_F(PublicFsAvbUtilTest, GetHashtreeDescriptor) {

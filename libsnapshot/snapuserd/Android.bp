@@ -113,6 +113,7 @@ cc_library_static {
     header_libs: [
         "libcutils_headers",
         "libstorage_literals_headers",
+        "libupdate_engine_headers",
     ],
     ramdisk_available: true,
     vendor_ramdisk_available: true,
@@ -162,6 +163,7 @@ cc_defaults {
     header_libs: [
         "libcutils_headers",
         "libstorage_literals_headers",
+        "libupdate_engine_headers",
     ],
 
     system_shared_libs: [],

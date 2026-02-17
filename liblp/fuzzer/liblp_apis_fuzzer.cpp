@@ -58,7 +58,7 @@ const string kSuffix[] = {"_a", "_b", "a", "b"};
 
 class LiplpApisFuzzer {
   public:
-    LiplpApisFuzzer(const uint8_t* data, size_t size) : mFdp(data, size){};
+    LiplpApisFuzzer(const uint8_t* data, size_t size) : mFdp(data, size) {};
     void process();
 
   private:

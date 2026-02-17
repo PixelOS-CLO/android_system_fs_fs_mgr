@@ -20,11 +20,11 @@
 #include <android-base/result.h>
 
 #define VBMETA_TAG "[libvbmeta] "
-#define LWARN LOG(WARNING) << VBMETA_TAG
-#define LINFO LOG(INFO) << VBMETA_TAG
-#define LERROR LOG(ERROR) << VBMETA_TAG
-#define PWARNING PLOG(WARNING) << VBMETA_TAG
-#define PERROR PLOG(ERROR) << VBMETA_TAG
+#define LWARN      LOG(WARNING) << VBMETA_TAG
+#define LINFO      LOG(INFO) << VBMETA_TAG
+#define LERROR     LOG(ERROR) << VBMETA_TAG
+#define PWARNING   PLOG(WARNING) << VBMETA_TAG
+#define PERROR     PLOG(ERROR) << VBMETA_TAG
 
 namespace android {
 namespace fs_mgr {

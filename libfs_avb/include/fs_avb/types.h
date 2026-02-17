@@ -70,7 +70,7 @@ struct FsAvbHashtreeDescriptor : AvbHashtreeDescriptor {
 class VBMetaData {
   public:
     // Constructors
-    VBMetaData() : vbmeta_ptr_(nullptr), vbmeta_size_(0){};
+    VBMetaData() : vbmeta_ptr_(nullptr), vbmeta_size_(0) {};
 
     VBMetaData(const uint8_t* data, size_t size, const std::string& partition_name)
         : vbmeta_ptr_(new (std::nothrow) uint8_t[size]),

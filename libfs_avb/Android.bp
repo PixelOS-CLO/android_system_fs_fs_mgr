@@ -43,6 +43,7 @@ cc_library_static {
     static_libs: [
         "libavb",
         "libdm",
+        "libdm_flags_cc_lib",
         "libgsi",
         "libfstab",
     ],
@@ -130,6 +131,7 @@ cc_test_host {
         unit_test: true,
     },
     static_libs: [
+        "libdm_flags_cc_lib",
         "libfs_avb_test_util",
     ],
     compile_multilib: "first",

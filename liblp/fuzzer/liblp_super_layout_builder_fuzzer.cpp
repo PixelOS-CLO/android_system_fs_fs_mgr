@@ -17,13 +17,13 @@
 
 #include <android-base/unique_fd.h>
 #include <fcntl.h>
-#include <functional>
 #include <fuzzer/FuzzedDataProvider.h>
 #include <liblp/metadata_format.h>
 #include <liblp/super_layout_builder.h>
 #include <linux/memfd.h>
 #include <storage_literals/storage_literals.h>
 #include <sys/syscall.h>
+#include <functional>
 
 using namespace android::fs_mgr;
 using namespace std;
@@ -49,7 +49,7 @@ const uint64_t kAttributeTypes[] = {
 
 class SuperLayoutBuilderFuzzer {
   public:
-    SuperLayoutBuilderFuzzer(const uint8_t* data, size_t size) : mFdp(data, size){};
+    SuperLayoutBuilderFuzzer(const uint8_t* data, size_t size) : mFdp(data, size) {};
     void process();
 
   private:

@@ -18,7 +18,7 @@
 
 #include <android-base/logging.h>
 
-#define FSTAB_TAG "[libfstab] "
+#define FSTAB_TAG      "[libfstab] "
 
 /* The CHECK() in logging.h will use program invocation name as the tag.
  * Thus, the log will have prefix "init: " when libfs_mgr is statically
@@ -28,13 +28,13 @@
 #define FSTAB_CHECK(x) CHECK(x) << "in " << FSTAB_TAG
 
 // Logs a message to kernel
-#define LINFO LOG(INFO) << FSTAB_TAG
-#define LWARNING LOG(WARNING) << FSTAB_TAG
-#define LERROR LOG(ERROR) << FSTAB_TAG
-#define LFATAL LOG(FATAL) << FSTAB_TAG
+#define LINFO          LOG(INFO) << FSTAB_TAG
+#define LWARNING       LOG(WARNING) << FSTAB_TAG
+#define LERROR         LOG(ERROR) << FSTAB_TAG
+#define LFATAL         LOG(FATAL) << FSTAB_TAG
 
 // Logs a message with strerror(errno) at the end
-#define PINFO PLOG(INFO) << FSTAB_TAG
-#define PWARNING PLOG(WARNING) << FSTAB_TAG
-#define PERROR PLOG(ERROR) << FSTAB_TAG
-#define PFATAL PLOG(FATAL) << FSTAB_TAG
+#define PINFO          PLOG(INFO) << FSTAB_TAG
+#define PWARNING       PLOG(WARNING) << FSTAB_TAG
+#define PERROR         PLOG(ERROR) << FSTAB_TAG
+#define PFATAL         PLOG(FATAL) << FSTAB_TAG

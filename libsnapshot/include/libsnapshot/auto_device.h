@@ -24,7 +24,7 @@ namespace snapshot {
 // An abstract "device" that will be cleaned up (unmapped, unmounted, etc.) upon
 // destruction.
 struct AutoDevice {
-    virtual ~AutoDevice(){};
+    virtual ~AutoDevice() {};
     void Release();
 
     bool HasDevice() const { return !name_.empty(); }

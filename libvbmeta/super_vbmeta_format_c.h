@@ -21,24 +21,24 @@
 #include <stdint.h>
 
 /* Magic signature for super vbmeta. */
-#define SUPER_VBMETA_MAGIC 0x5356424d
+#define SUPER_VBMETA_MAGIC                0x5356424d
 
 /* Current super vbmeta version. */
-#define SUPER_VBMETA_MAJOR_VERSION 1
-#define SUPER_VBMETA_MINOR_VERSION 0
+#define SUPER_VBMETA_MAJOR_VERSION        1
+#define SUPER_VBMETA_MINOR_VERSION        0
 
 /* super vbmeta size. */
-#define SUPER_VBMETA_HEADER_SIZE sizeof(SuperVBMetaHeader)
-#define SUPER_VBMETA_DESCRIPTOR_SIZE sizeof(VBMetaDescriptor)
-#define SUPER_VBMETA_TABLE_MAX_SIZE 2048
+#define SUPER_VBMETA_HEADER_SIZE          sizeof(SuperVBMetaHeader)
+#define SUPER_VBMETA_DESCRIPTOR_SIZE      sizeof(VBMetaDescriptor)
+#define SUPER_VBMETA_TABLE_MAX_SIZE       2048
 
 /* super vbmeta offset. */
 #define PRIMARY_SUPER_VBMETA_TABLE_OFFSET 0
-#define BACKUP_SUPER_VBMETA_TABLE_OFFSET SUPER_VBMETA_TABLE_MAX_SIZE
+#define BACKUP_SUPER_VBMETA_TABLE_OFFSET  SUPER_VBMETA_TABLE_MAX_SIZE
 
 /* restriction of vbmeta image */
-#define VBMETA_IMAGE_MAX_NUM 32
-#define VBMETA_IMAGE_MAX_SIZE 64 * 1024
+#define VBMETA_IMAGE_MAX_NUM              32
+#define VBMETA_IMAGE_MAX_SIZE             64 * 1024
 
 /* Binary format of the super vbmeta image.
  *

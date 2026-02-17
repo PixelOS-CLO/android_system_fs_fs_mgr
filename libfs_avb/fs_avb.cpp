@@ -221,9 +221,9 @@ AvbUniquePtr AvbHandle::LoadAndVerifyVbmeta(
     auto device_path = custom_device_path ? custom_device_path : android_by_name_symlink;
 
     auto verify_result = LoadAndVerifyVbmetaByPartition(
-        partition_name, ab_suffix, ab_other_suffix, expected_key_blob, allow_verification_error,
-        load_chained_vbmeta, rollback_protection, device_path, false,
-        /* is_chained_vbmeta */ &avb_handle->vbmeta_images_);
+            partition_name, ab_suffix, ab_other_suffix, expected_key_blob, allow_verification_error,
+            load_chained_vbmeta, rollback_protection, device_path, false,
+            /* is_chained_vbmeta */ &avb_handle->vbmeta_images_);
     switch (verify_result) {
         case VBMetaVerifyResult::kSuccess:
             avb_handle->status_ = AvbHandleStatus::kSuccess;
