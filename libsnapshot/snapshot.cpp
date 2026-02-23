@@ -3996,11 +3996,7 @@ bool SnapshotManager::MapUpdateSnapshot(const CreateLogicalPartitionParams& para
         return false;
     }
 
-    if (!paths.snapshot_device.empty()) {
-        *snapshot_path = paths.snapshot_device;
-    } else {
-        *snapshot_path = paths.target_device;
-    }
+    *snapshot_path = paths.target_device;
     DCHECK(!snapshot_path->empty());
     return true;
 }

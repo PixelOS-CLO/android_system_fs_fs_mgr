@@ -748,9 +748,6 @@ class SnapshotManager final : public ISnapshotManager {
 
         // COW name (eg system_cow). Not present if no COW is needed.
         std::string cow_device_name;
-
-        // dm-snapshot instance. Not present in Update mode for VABC.
-        std::string snapshot_device;
     };
 
     // Helpers for OpenSnapshotWriter.
