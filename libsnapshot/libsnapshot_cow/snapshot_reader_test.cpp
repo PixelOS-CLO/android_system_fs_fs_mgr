@@ -189,5 +189,144 @@ TEST_F(OfflineSnapshotTest, CompressedSnapshot) {
     ASSERT_NO_FATAL_FAILURE(TestReads(writer.get()));
 }
 
+TEST_F(OfflineSnapshotTest, ExtentMapMergeLeftAndRight) {
+    CowOptions options;
+    options.compression = "gz";
+    options.max_blocks = {kBlockCount};
+    options.scratch_space = false;
+
+    unique_fd cow_fd(dup(cow_->fd));
+    ASSERT_GE(cow_fd, 0);
+
+    auto writer = CreateCowWriter(2, options, std::move(cow_fd));
+    ASSERT_NE(writer, nullptr);
+
+    // 1. Merge with left and right:
+    // Insert 0, then 2, then 1 -> Should merge into a single Extent(0, 3)
+    ASSERT_TRUE(writer->AddZeroBlocks(0, 1));
+    ASSERT_TRUE(writer->AddZeroBlocks(2, 1));
+    ASSERT_TRUE(writer->AddZeroBlocks(1, 1));
+
+    ASSERT_TRUE(writer->Finalize());
+
+    auto reader = writer->OpenFileDescriptor(base_->path);
+    ASSERT_NE(reader, nullptr);
+
+    // Read to verify ExtentMap merges and spans correctly
+
+    // Verify 1: Zero blocks merged (0, 3)
+    std::string buffer(kBlockSize * 3, 0x7f);
+    std::string zeroes(kBlockSize * 3, 0);
+    ASSERT_EQ(reader->Seek(0, SEEK_SET), 0);
+    ASSERT_EQ(reader->Read(buffer.data(), buffer.size()), buffer.size());
+    ASSERT_EQ(buffer, zeroes);
+}
+
+TEST_F(OfflineSnapshotTest, ExtentMapMergeDiscontiguousToContiguous) {
+    CowOptions options;
+    options.compression = "gz";
+    options.max_blocks = {kBlockCount};
+    options.scratch_space = false;
+
+    unique_fd cow_fd(dup(cow_->fd));
+    ASSERT_GE(cow_fd, 0);
+
+    auto writer = CreateCowWriter(2, options, std::move(cow_fd));
+    ASSERT_NE(writer, nullptr);
+
+    // 2. Discontiguous to contiguous:
+    // Insert CopyOp 5 (source 8), then CopyOp 4 (source 7)
+    // They are logically contiguous: 4 -> 7, 5 -> 8
+    // Should merge into Extent(4, 2)
+    ASSERT_TRUE(writer->AddCopy(5, 8));
+    ASSERT_TRUE(writer->AddCopy(4, 7));
+
+    ASSERT_TRUE(writer->Finalize());
+
+    auto reader = writer->OpenFileDescriptor(base_->path);
+    ASSERT_NE(reader, nullptr);
+
+    // Verify 2: Copy blocks merged (4, 2)
+    std::string copy_blocks = base_blocks_[7] + base_blocks_[8];
+    std::string buffer(kBlockSize * 2, 0);
+    ASSERT_EQ(reader->Seek(4 * kBlockSize, SEEK_SET), 4 * kBlockSize);
+    ASSERT_EQ(reader->Read(buffer.data(), buffer.size()), buffer.size());
+    ASSERT_EQ(buffer, copy_blocks);
+
+    // Read partially across merged copy blocks
+    std::string partially(kBlockSize, 0);
+    ASSERT_EQ(reader->Seek(4 * kBlockSize + kBlockSize / 2, SEEK_SET),
+              4 * kBlockSize + kBlockSize / 2);
+    ASSERT_EQ(reader->Read(partially.data(), partially.size()), partially.size());
+    std::string expected_partially = base_blocks_[7].substr(kBlockSize / 2, kBlockSize / 2) +
+                                     base_blocks_[8].substr(0, kBlockSize / 2);
+    ASSERT_EQ(partially, expected_partially);
+}
+
+TEST_F(OfflineSnapshotTest, ExtentMapReadAcrossDifferentExtentTypes) {
+    CowOptions options;
+    options.compression = "gz";
+    options.max_blocks = {kBlockCount};
+    options.scratch_space = false;
+
+    unique_fd cow_fd(dup(cow_->fd));
+    ASSERT_GE(cow_fd, 0);
+
+    auto writer = CreateCowWriter(2, options, std::move(cow_fd));
+    ASSERT_NE(writer, nullptr);
+
+    // Setup for spanning read:
+    // Copy blocks 4, 5
+    ASSERT_TRUE(writer->AddCopy(5, 8));
+    ASSERT_TRUE(writer->AddCopy(4, 7));
+
+    // 3. Separate non-mergeable ops:
+    std::string new_block = MakeNewBlockString();
+    ASSERT_TRUE(writer->AddRawBlocks(6, new_block.data(), kBlockSize));
+    ASSERT_TRUE(writer->AddRawBlocks(7, new_block.data(), kBlockSize));
+
+    ASSERT_TRUE(writer->Finalize());
+
+    auto reader = writer->OpenFileDescriptor(base_->path);
+    ASSERT_NE(reader, nullptr);
+
+    // Verify 3: Raw blocks (6, 2) and spanning across different extents types
+    std::string spanning_buffer(kBlockSize * 4, 0x7f);
+    // Span blocks 4, 5 (Copy), 6, 7 (Raw)
+    std::string spanning_expected = base_blocks_[7] + base_blocks_[8] + new_block + new_block;
+    ASSERT_EQ(reader->Seek(4 * kBlockSize, SEEK_SET), 4 * kBlockSize);
+    ASSERT_EQ(reader->Read(spanning_buffer.data(), spanning_buffer.size()), spanning_buffer.size());
+    ASSERT_EQ(spanning_buffer, spanning_expected);
+}
+
+TEST_F(OfflineSnapshotTest, ExtentMapNoMergeCopyOps) {
+    CowOptions options;
+    options.compression = "gz";
+    options.max_blocks = {kBlockCount};
+    options.scratch_space = false;
+
+    unique_fd cow_fd(dup(cow_->fd));
+    ASSERT_GE(cow_fd, 0);
+
+    auto writer = CreateCowWriter(2, options, std::move(cow_fd));
+    ASSERT_NE(writer, nullptr);
+
+    ASSERT_TRUE(writer->AddCopy(2, 0));
+    ASSERT_TRUE(writer->AddCopy(3, 5));
+
+    ASSERT_TRUE(writer->Finalize());
+
+    auto reader = writer->OpenFileDescriptor(base_->path);
+    ASSERT_NE(reader, nullptr);
+
+    // Read blocks 2,3 make sure they match base block 0,5
+    std::string buffer(kBlockSize * 2, 0);
+    ASSERT_EQ(reader->Seek(2 * kBlockSize, SEEK_SET), 2 * kBlockSize);
+    ASSERT_EQ(reader->Read(buffer.data(), buffer.size()), buffer.size());
+
+    std::string expected = base_blocks_[0] + base_blocks_[5];
+    ASSERT_EQ(buffer, expected);
+}
+
 }  // namespace snapshot
 }  // namespace android

@@ -194,6 +194,7 @@ cc_defaults {
         "libz",
         "liblz4",
         "libzstd",
+        "libsnapshot_flags_cc_lib",
     ],
     header_libs: [
         "libupdate_engine_headers",
@@ -378,6 +379,7 @@ cc_test {
     ],
     srcs: [
         "libsnapshot_cow/snapshot_reader_test.cpp",
+        "libsnapshot_cow/extent_map_test.cpp",
         "libsnapshot_cow/test_v2.cpp",
         "libsnapshot_cow/test_v3.cpp",
     ],

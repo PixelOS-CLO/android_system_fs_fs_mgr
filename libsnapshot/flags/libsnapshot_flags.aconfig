@@ -27,3 +27,11 @@ flag {
   bug: "399902322"
   is_fixed_read_only: true
 }
+
+flag {
+  name: "memory_efficient_data_structures"
+  is_exported: false
+  namespace: "android_kernel"
+  description: "Use more memmory efficient data structures/algorithms, such as ExtentMap, bitset, inline sorting, etc"
+  bug: "475862875"
+}

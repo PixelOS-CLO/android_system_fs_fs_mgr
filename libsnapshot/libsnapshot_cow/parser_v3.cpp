@@ -109,7 +109,7 @@ bool CowParserV3::ParseOps(borrowed_fd fd, const uint32_t op_index) {
     // fill out mapping of XOR op data location
     uint64_t data_pos = GetDataOffset(header_);
 
-    xor_data_loc_ = std::make_shared<std::unordered_map<uint64_t, uint64_t>>();
+    xor_data_loc_ = std::make_shared<typeof(*xor_data_loc_)>();
 
     for (auto op : *ops_) {
         if (op.type() == kCowXorOp) {

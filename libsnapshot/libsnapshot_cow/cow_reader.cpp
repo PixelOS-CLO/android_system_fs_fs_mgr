@@ -288,17 +288,37 @@ bool CowReader::PrepMergeOps() {
     std::vector<uint32_t> other_ops;
     std::vector<uint32_t> merge_op_blocks;
     std::unordered_map<uint32_t, int> block_map;
+    std::vector<uint32_t> sequence_data;
 
     switch (header_.prefix.major_version) {
         case 1:
         case 2:
-            GetSequenceDataV2(&merge_op_blocks, &other_ops, &block_map);
+            if (!GetSequenceDataV2(&sequence_data)) return false;
             break;
         case 3:
-            GetSequenceData(&merge_op_blocks, &other_ops, &block_map);
+            if (!GetSequenceData(&sequence_data)) return false;
             break;
         default:
             break;
+    }
+
+    std::unordered_set<uint32_t> seq_ops_set(sequence_data.begin(), sequence_data.end());
+    merge_op_blocks = std::move(sequence_data);
+
+    for (size_t i = 0; i < ops_->size(); i++) {
+        auto& current_op = ops_->data()[i];
+
+        if (IsMetadataOp(current_op)) {
+            continue;
+        }
+
+        // Sequence ops must be the first ops in the stream.
+        if (seq_ops_set.empty() && IsOrderedOp(current_op)) {
+            merge_op_blocks.emplace_back(current_op.new_block);
+        } else if (seq_ops_set.count(current_op.new_block) == 0) {
+            other_ops.push_back(current_op.new_block);
+        }
+        block_map.insert({current_op.new_block, i});
     }
 
     for (auto block : merge_op_blocks) {
@@ -358,10 +378,7 @@ bool CowReader::PrepMergeOps() {
     return true;
 }
 
-bool CowReader::GetSequenceDataV2(std::vector<uint32_t>* merge_op_blocks,
-                                  std::vector<uint32_t>* other_ops,
-                                  std::unordered_map<uint32_t, int>* block_map) {
-    auto seq_ops_set = std::unordered_set<uint32_t>();
+bool CowReader::GetSequenceDataV2(std::vector<uint32_t>* sequence_data) {
     size_t num_seqs = 0;
     size_t read;
     for (size_t i = 0; i < ops_->size(); i++) {
@@ -370,68 +387,48 @@ bool CowReader::GetSequenceDataV2(std::vector<uint32_t>* merge_op_blocks,
         if (current_op.type() == kCowSequenceOp) {
             size_t seq_len = current_op.data_length / sizeof(uint32_t);
 
-            merge_op_blocks->resize(merge_op_blocks->size() + seq_len);
-            if (!GetRawBytes(&current_op, &merge_op_blocks->data()[num_seqs],
-                             current_op.data_length, &read)) {
+            sequence_data->resize(sequence_data->size() + seq_len);
+            if (!GetRawBytes(&current_op, &sequence_data->data()[num_seqs], current_op.data_length,
+                             &read)) {
                 PLOG(ERROR) << "Failed to read sequence op!";
                 return false;
             }
-            for (size_t j = num_seqs; j < num_seqs + seq_len; j++) {
-                seq_ops_set.insert(merge_op_blocks->at(j));
-            }
             num_seqs += seq_len;
         }
-
-        if (IsMetadataOp(current_op)) {
-            continue;
-        }
-
-        // Sequence ops must be the first ops in the stream.
-        if (seq_ops_set.empty() && IsOrderedOp(current_op)) {
-            merge_op_blocks->emplace_back(current_op.new_block);
-        } else if (seq_ops_set.count(current_op.new_block) == 0) {
-            other_ops->push_back(current_op.new_block);
-        }
-        block_map->insert({current_op.new_block, i});
     }
-    return false;
+    return true;
 }
 
-bool CowReader::GetSequenceData(std::vector<uint32_t>* merge_op_blocks,
-                                std::vector<uint32_t>* other_ops,
-                                std::unordered_map<uint32_t, int>* block_map) {
-    std::unordered_set<uint32_t> seq_ops_set;
+bool CowReader::GetSequenceData(std::vector<uint32_t>* sequence_data) {
     // read sequence ops data
-    merge_op_blocks->resize(header_.sequence_data_count);
+    sequence_data->resize(header_.sequence_data_count);
     if (!android::base::ReadFullyAtOffset(
-                fd_, merge_op_blocks->data(),
-                header_.sequence_data_count * sizeof(merge_op_blocks->at(0)),
+                fd_, sequence_data->data(),
+                header_.sequence_data_count * sizeof(sequence_data->at(0)),
                 GetSequenceOffset(header_))) {
         PLOG(ERROR) << "failed to read sequence buffer. seq_data_count: "
                     << header_.sequence_data_count << " at offset: " << GetSequenceOffset(header_);
         return false;
     }
-    seq_ops_set.reserve(merge_op_blocks->size());
-    for (auto& i : *merge_op_blocks) {
-        seq_ops_set.insert(i);
-    }
-    // read ordered op data
-    for (size_t i = 0; i < ops_->size(); i++) {
-        auto& current_op = ops_->data()[i];
-        // Sequence ops must be the first ops in the stream.
-        if (seq_ops_set.empty()) {
-            merge_op_blocks->emplace_back(current_op.new_block);
-        } else if (seq_ops_set.count(current_op.new_block) == 0) {
-            other_ops->push_back(current_op.new_block);
-        }
-        block_map->insert({current_op.new_block, i});
-    }
     return true;
+}
+
+const CowOperation* FindOpForBlock(uint64_t block, ICowOpIter* iter) {
+    while (!iter->AtBegin()) {
+        if (iter->Get()->new_block == block) {
+            return iter->Get();
+        }
+        iter->Prev();
+    }
+    if (iter->Get()->new_block == block) {
+        return iter->Get();
+    }
+    return nullptr;
 }
 
 bool CowReader::VerifyMergeOps() {
     auto itr = GetMergeOpIter(true);
-    std::unordered_map<uint64_t, const CowOperation*> overwritten_blocks;
+    std::vector<bool> dirty_blocks;
     bool non_ordered_op_found = false;
 
     while (!itr->AtEnd()) {
@@ -469,20 +466,25 @@ bool CowReader::VerifyMergeOps() {
         bool misaligned = (GetBlockRelativeOffset(header_, offset) != 0);
 
         const CowOperation* overwrite = nullptr;
-        if (overwritten_blocks.count(block)) {
-            overwrite = overwritten_blocks[block];
+        if (block < dirty_blocks.size() && dirty_blocks[block]) {
+            overwrite = FindOpForBlock(block, itr.get());
+            CHECK(overwrite != nullptr);
             LOG(ERROR) << "Invalid Sequence! Block needed for op:\n"
                        << *op << "\noverwritten by previously merged op:\n"
                        << *overwrite;
         }
-        if (misaligned && overwritten_blocks.count(block + 1)) {
-            overwrite = overwritten_blocks[block + 1];
+        if (misaligned && block + 1 < dirty_blocks.size() && dirty_blocks[block + 1]) {
+            overwrite = FindOpForBlock(block + 1, itr.get());
+            CHECK(overwrite != nullptr);
             LOG(ERROR) << "Invalid Sequence! Block needed for op:\n"
                        << op << "\noverwritten by previously merged op:\n"
                        << *overwrite;
         }
         if (overwrite != nullptr) return false;
-        overwritten_blocks[op->new_block] = op;
+        if (op->new_block >= dirty_blocks.size()) {
+            dirty_blocks.resize(op->new_block + 1);
+        }
+        dirty_blocks[op->new_block] = true;
         itr->Next();
     }
     return true;

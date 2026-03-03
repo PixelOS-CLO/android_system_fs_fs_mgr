@@ -63,7 +63,7 @@ bool CowParserV2::Parse(borrowed_fd fd, const CowHeaderV3& header, std::optional
 
 bool CowParserV2::ParseOps(borrowed_fd fd, std::optional<uint64_t> label) {
     uint64_t pos;
-    auto xor_data_loc = std::make_shared<std::unordered_map<uint64_t, uint64_t>>();
+    auto xor_data_loc = std::make_shared<typeof(*xor_data_loc_)>();
 
     // Skip the scratch space
     if (header_.prefix.major_version >= 2 && (header_.buffer_size > 0)) {
