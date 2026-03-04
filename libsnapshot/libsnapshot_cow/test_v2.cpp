@@ -15,7 +15,6 @@
 #include <sys/stat.h>
 
 #include <cstdio>
-#include <iostream>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -1250,7 +1249,7 @@ TEST_F(CowTest, DeleteMidCluster) {
 TEST_F(CowTest, BigSeqOp) {
     CowOptions options;
     CowWriterV2 writer(options, GetCowFd());
-    const int seq_len = std::numeric_limits<uint16_t>::max() / sizeof(uint32_t) + 1;
+    constexpr int seq_len = std::numeric_limits<uint16_t>::max() / sizeof(uint32_t) + 1;
     uint32_t sequence[seq_len];
     for (int i = 0; i < seq_len; i++) {
         sequence[i] = i + 1;

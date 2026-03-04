@@ -144,16 +144,11 @@ static std::string GetCowName(const std::string& snapshot_name) {
 }
 
 SnapshotManager::SnapshotDriver SnapshotManager::GetSnapshotDriver(LockedFile* lock) {
-    if (UpdateUsesUserSnapshots(lock)) {
-        if (UpdateUsesUblk(lock)) {
-            return SnapshotManager::SnapshotDriver::UBLK;
-        } else {
-            return SnapshotManager::SnapshotDriver::DM_USER;
-        }
+    if (UpdateUsesUblk(lock)) {
+        return SnapshotManager::SnapshotDriver::UBLK;
+    } else {
+        return SnapshotManager::SnapshotDriver::DM_USER;
     }
-    LOG(FATAL) << "dm-snapshot is deprecated since it was introduced in android S";
-    // This is unreachable, but needed for compilation.
-    return SnapshotManager::SnapshotDriver::DM_SNAPSHOT;
 }
 
 static std::string GetSnapshotCowName(const std::string& snapshot_name,
@@ -916,31 +911,27 @@ bool SnapshotManager::MapUserspaceCow(LockedFile* lock, const std::string& name,
                                       const std::chrono::milliseconds& timeout_ms,
                                       std::string* path) {
     CHECK(lock);
-    bool is_userspace_snapshot_path = UpdateUsesUserSnapshots(lock);
     bool use_ublk_processing = false;
 
-    if (is_userspace_snapshot_path) {
-        SnapshotStatus status;
-        if (!ReadSnapshotStatus(lock, name, &status)) {
-            LOG(ERROR) << "MapUserspaceCow: ReadSnapshotStatus failed for " << name;
-            return false;
-        }
-        if (status.state() == SnapshotState::NONE ||
-            status.state() == SnapshotState::MERGE_COMPLETED) {
-            LOG(ERROR) << "MapUserspaceCow: Should not create a snapshot device for " << name
-                       << " in state " << SnapshotState_Name(status.state());
-            return false;
-        }
-
-        SnapshotUpdateStatus update_status = ReadSnapshotUpdateStatus(lock);
-        if (update_status.state() == UpdateState::MergeCompleted ||
-            update_status.state() == UpdateState::MergeNeedsReboot) {
-            LOG(ERROR) << "MapUserspaceCow: Should not create a snapshot device for " << name
-                       << " while global merging has completed.";
-            return false;
-        }
-        use_ublk_processing = update_status.ublk_snapshots_enabled();
+    SnapshotStatus status;
+    if (!ReadSnapshotStatus(lock, name, &status)) {
+        LOG(ERROR) << "MapUserspaceCow: ReadSnapshotStatus failed for " << name;
+        return false;
     }
+    if (status.state() == SnapshotState::NONE || status.state() == SnapshotState::MERGE_COMPLETED) {
+        LOG(ERROR) << "MapUserspaceCow: Should not create a snapshot device for " << name
+                   << " in state " << SnapshotState_Name(status.state());
+        return false;
+    }
+
+    SnapshotUpdateStatus update_status = ReadSnapshotUpdateStatus(lock);
+    if (update_status.state() == UpdateState::MergeCompleted ||
+        update_status.state() == UpdateState::MergeNeedsReboot) {
+        LOG(ERROR) << "MapUserspaceCow: Should not create a snapshot device for " << name
+                   << " while global merging has completed.";
+        return false;
+    }
+    use_ublk_processing = update_status.ublk_snapshots_enabled();
 
     std::string misc_name = name;
     if (use_first_stage_snapuserd_) {
@@ -952,42 +943,22 @@ bool SnapshotManager::MapUserspaceCow(LockedFile* lock, const std::string& name,
     }
 
     uint64_t base_sectors = 0;
-    if (!is_userspace_snapshot_path) {
-        // Non-Userspace Snapshot Path
-        base_sectors = snapuserd_client_->InitDmUserCow(misc_name, cow_file, base_device);
-        if (base_sectors == 0) {
-            LOG(ERROR) << "MapUserspaceCow: Failed to init/get size via InitDmUserCow for "
-                          "non-userspace snapshot "
-                       << misc_name;
-            return false;
-        }
-        // AttachDmUser for non-userspace path
-        if (!snapuserd_client_->AttachDmUser(misc_name)) {
-            LOG(ERROR) << "MapUserspaceCow: AttachDmUser failed for non-userspace snapshot "
-                       << misc_name;
-            return false;
-        }
-        LOG(DEBUG) << "MapUserspaceCow: AttachDmUser success for non-userspace snapshot "
-                   << misc_name;
-        return true;
-    } else {
-        // Userspace Snapshot Path (ublk or dm-user)
-        if (!CalculateBaseSectorsForUserspaceCow(cow_file, base_path_merge, base_sectors)) {
-            return false;
-        }
-        if (base_sectors == 0) {
-            LOG(ERROR) << "MapUserspaceCow: base_sectors is zero after calculation for userspace "
-                          "snapshot "
-                       << name;
-            return false;
-        }
-        if (use_ublk_processing) {
-            return MapUserspaceCowUblk(name, misc_name, cow_file, base_device, base_path_merge,
-                                       base_sectors, timeout_ms, path);
-        }
-        return MapUserspaceCowDmUser(name, misc_name, cow_file, base_device, base_path_merge,
-                                     base_sectors, timeout_ms, path);
+    // Userspace Snapshot Path (ublk or dm-user)
+    if (!CalculateBaseSectorsForUserspaceCow(cow_file, base_path_merge, base_sectors)) {
+        return false;
     }
+    if (base_sectors == 0) {
+        LOG(ERROR) << "MapUserspaceCow: base_sectors is zero after calculation for userspace "
+                      "snapshot "
+                   << name;
+        return false;
+    }
+    if (use_ublk_processing) {
+        return MapUserspaceCowUblk(name, misc_name, cow_file, base_device, base_path_merge,
+                                   base_sectors, timeout_ms, path);
+    }
+    return MapUserspaceCowDmUser(name, misc_name, cow_file, base_device, base_path_merge,
+                                 base_sectors, timeout_ms, path);
 }
 
 std::optional<std::string> SnapshotManager::MapCowImage(
@@ -1042,15 +1013,8 @@ bool SnapshotManager::MapSourceDevice(LockedFile* lock, const std::string& name,
 
 bool SnapshotManager::UnmapSnapshot(LockedFile* lock, const std::string& name) {
     CHECK(lock);
-    if (UpdateUsesUserSnapshots(lock)) {
-        if (!UnmapUserspaceSnapshotDevice(lock, name)) {
-            return false;
-        }
-    } else {
-        if (!DeleteDeviceIfExists(name)) {
-            LOG(ERROR) << "Could not delete snapshot device: " << name;
-            return false;
-        }
+    if (!UnmapUserspaceSnapshotDevice(lock, name)) {
+        return false;
     }
     return true;
 }
@@ -1112,10 +1076,8 @@ bool SnapshotManager::DeleteSnapshot(LockedFile* lock, const std::string& name) 
     CHECK(lock->lock_mode() == LOCK_EX);
     if (!EnsureImageManager()) return false;
 
-    if (UpdateUsesUserSnapshots(lock)) {
-        // Discard is best effort, so we do not check for errors
-        DiscardCowDevice(GetCowName(name));
-    }
+    // Discard is best effort, so we do not check for errors
+    DiscardCowDevice(GetCowName(name));
 
     if (!UnmapCowDevices(lock, name)) {
         return false;
@@ -1292,18 +1254,14 @@ MergeFailureCode SnapshotManager::SwitchSnapshotToMerge(LockedFile* lock, const 
         LOG(WARNING) << "Snapshot " << name
                      << " has unexpected state: " << SnapshotState_Name(status.state());
     }
-
-    if (UpdateUsesUserSnapshots(lock)) {
-        if (EnsureSnapuserdConnected()) {
-            // This is the point where we inform the daemon to initiate/resume
-            // the merge
-            if (!snapuserd_client_->InitiateMerge(name)) {
-                return MergeFailureCode::UnknownTable;
-            }
-        } else {
-            LOG(ERROR) << "Failed to connect to snapuserd daemon to initiate merge";
-            return MergeFailureCode::UnknownTable;
-        }
+    if (!EnsureSnapuserdConnected()) {
+        LOG(ERROR) << "Failed to connect to snapuserd daemon to initiate merge";
+        return MergeFailureCode::UnknownTable;
+    }
+    // This is the point where we inform the daemon to initiate/resume
+    // the merge
+    if (!snapuserd_client_->InitiateMerge(name)) {
+        return MergeFailureCode::UnknownTable;
     }
 
     status.set_state(SnapshotState::MERGING);
@@ -1619,78 +1577,73 @@ auto SnapshotManager::CheckTargetMergeState(LockedFile* lock, const std::string&
     DCHECK((current_metadata = ReadCurrentMetadata()) &&
            GetMetadataPartitionState(*current_metadata, name) == MetadataPartitionState::Updated);
 
-    if (UpdateUsesUserSnapshots(lock)) {
-        if (!EnsureSnapuserdConnected()) {
-            return MergeResult(UpdateState::MergeFailed, MergeFailureCode::QuerySnapshotStatus);
-        }
+    if (!EnsureSnapuserdConnected()) {
+        return MergeResult(UpdateState::MergeFailed, MergeFailureCode::QuerySnapshotStatus);
+    }
 
-        // Query the snapshot status from the daemon
-        const auto merge_status = snapuserd_client_->QuerySnapshotStatus(name);
-        if (merge_status == "snapshot-merge-failed") {
-            return MergeResult(UpdateState::MergeFailed, MergeFailureCode::UnknownTargetType);
-        }
+    // Query the snapshot status from the daemon
+    const auto merge_status = snapuserd_client_->QuerySnapshotStatus(name);
+    if (merge_status == "snapshot-merge-failed") {
+        return MergeResult(UpdateState::MergeFailed, MergeFailureCode::UnknownTargetType);
+    }
 
-        if (merge_status == "snapshot") {
-            // This is the case when device reboots during merge. Once the device boots,
-            // snapuserd daemon will not resume merge immediately in first stage init.
-            // This is slightly different as compared to dm-snapshot-merge; In this
-            // case, metadata file will have "MERGING" state whereas the daemon will be
-            // waiting to resume the merge. Thus, we resume the merge at this point.
-            if (snapshot_status.state() == SnapshotState::MERGING) {
-                if (!snapuserd_client_->InitiateMerge(name)) {
-                    return MergeResult(UpdateState::MergeFailed,
-                                       MergeFailureCode::UnknownTargetType);
-                }
-                return MergeResult(UpdateState::Merging);
-            }
-
-            auto intended_phase = DecideMergePhase(snapshot_status);
-            if (intended_phase == MergePhase::SECOND_PHASE &&
-                update_status.merge_phase() == MergePhase::FIRST_PHASE) {
-                // The snapshot is not being merged because it's in the wrong phase.
-                return MergeResult(UpdateState::None);
-            }
-
-            // The inverse of the above condition should never be true. We
-            // should not enter the next phase without completing the first
-            // phase.
-            if (intended_phase != update_status.merge_phase()) {
-                LOG(ERROR) << "Snapshot " << name << " is out of phase";
-                return MergeResult(UpdateState::MergeFailed, MergeFailureCode::IncorrectMergePhase);
-            }
-
-            if (GetDebugFlag("block_merge_switchover")) {
-                LOG(INFO) << "Delayed merge switchover blocked for testing.";
-                return MergeResult(UpdateState::Merging);
-            }
-
-            // Resume the merge at this point. see b/374225913. We were probably
-            // interrupted during a phase change.
-            LOG(INFO) << "SwitchSnapshotToMerge: " << name << " after resuming merge";
-
-            auto code = SwitchSnapshotToMerge(lock, name);
-            if (code != MergeFailureCode::Ok) {
-                LOG(ERROR) << "Failed to switch snapshot: " << name
-                           << " to merge during second phase";
+    if (merge_status == "snapshot") {
+        // This is the case when device reboots during merge. Once the device boots,
+        // snapuserd daemon will not resume merge immediately in first stage init.
+        // This is slightly different as compared to dm-snapshot-merge; In this
+        // case, metadata file will have "MERGING" state whereas the daemon will be
+        // waiting to resume the merge. Thus, we resume the merge at this point.
+        if (snapshot_status.state() == SnapshotState::MERGING) {
+            if (!snapuserd_client_->InitiateMerge(name)) {
                 return MergeResult(UpdateState::MergeFailed, MergeFailureCode::UnknownTargetType);
             }
             return MergeResult(UpdateState::Merging);
         }
 
-        if (merge_status == "snapshot-merge") {
-            if (snapshot_status.state() == SnapshotState::MERGE_COMPLETED) {
-                LOG(ERROR) << "Snapshot " << name
-                           << " is merging after being marked merge-complete.";
-                return MergeResult(UpdateState::MergeFailed,
-                                   MergeFailureCode::UnmergedSectorsAfterCompletion);
-            }
+        auto intended_phase = DecideMergePhase(snapshot_status);
+        if (intended_phase == MergePhase::SECOND_PHASE &&
+            update_status.merge_phase() == MergePhase::FIRST_PHASE) {
+            // The snapshot is not being merged because it's in the wrong phase.
+            return MergeResult(UpdateState::None);
+        }
+
+        // The inverse of the above condition should never be true. We
+        // should not enter the next phase without completing the first
+        // phase.
+        if (intended_phase != update_status.merge_phase()) {
+            LOG(ERROR) << "Snapshot " << name << " is out of phase";
+            return MergeResult(UpdateState::MergeFailed, MergeFailureCode::IncorrectMergePhase);
+        }
+
+        if (GetDebugFlag("block_merge_switchover")) {
+            LOG(INFO) << "Delayed merge switchover blocked for testing.";
             return MergeResult(UpdateState::Merging);
         }
 
-        if (merge_status != "snapshot-merge-complete") {
-            LOG(ERROR) << "Snapshot " << name << " has incorrect status: " << merge_status;
-            return MergeResult(UpdateState::MergeFailed, MergeFailureCode::ExpectedMergeTarget);
+        // Resume the merge at this point. see b/374225913. We were probably
+        // interrupted during a phase change.
+        LOG(INFO) << "SwitchSnapshotToMerge: " << name << " after resuming merge";
+
+        auto code = SwitchSnapshotToMerge(lock, name);
+        if (code != MergeFailureCode::Ok) {
+            LOG(ERROR) << "Failed to switch snapshot: " << name << " to merge during second phase";
+            return MergeResult(UpdateState::MergeFailed, MergeFailureCode::UnknownTargetType);
         }
+        return MergeResult(UpdateState::Merging);
+    }
+
+    if (merge_status == "snapshot-merge") {
+        if (snapshot_status.state() == SnapshotState::MERGE_COMPLETED) {
+            LOG(ERROR) << "Snapshot " << name << " is merging after being marked merge-complete.";
+            return MergeResult(UpdateState::MergeFailed,
+                               MergeFailureCode::UnmergedSectorsAfterCompletion);
+        }
+        return MergeResult(UpdateState::Merging);
+    }
+
+    if (merge_status != "snapshot-merge-complete") {
+        LOG(ERROR) << "Snapshot " << name << " has incorrect status: " << merge_status;
+        return MergeResult(UpdateState::MergeFailed, MergeFailureCode::ExpectedMergeTarget);
     }
 
     // Merging is done. First, update the status file to indicate the merge
@@ -1790,7 +1743,7 @@ void SnapshotManager::AcknowledgeMergeSuccess(LockedFile* lock) {
 
     RemoveAllUpdateState(lock);
 
-    if (UpdateUsesUserSnapshots(lock) && !device()->IsTestDevice()) {
+    if (!device()->IsTestDevice()) {
         if (snapuserd_client_) {
             snapuserd_client_->DetachSnapuserd();
             snapuserd_client_->RemoveTransitionedDaemonIndicator();
@@ -1821,14 +1774,11 @@ void SnapshotManager::AcknowledgeMergeFailure(MergeFailureCode failure_code) {
 
 bool SnapshotManager::OnSnapshotMergeComplete(LockedFile* lock, const std::string& name,
                                               const SnapshotStatus& status) {
-    if (!UpdateUsesUserSnapshots(lock)) {
-    } else {
-        // Just collapse the device - no need to query again as we just did
-        // prior to calling this function
-        if (!CollapseSnapshotDevice(lock, name, status)) {
-            LOG(ERROR) << "Unable to collapse snapshot: " << name;
-            return false;
-        }
+    // Just collapse the device - no need to query again as we just did
+    // prior to calling this function
+    if (!CollapseSnapshotDevice(name, status)) {
+        LOG(ERROR) << "Unable to collapse snapshot: " << name;
+        return false;
     }
 
     // Note that collapsing is implicitly an Unmap, so we don't need to
@@ -1841,7 +1791,7 @@ bool SnapshotManager::OnSnapshotMergeComplete(LockedFile* lock, const std::strin
     return true;
 }
 
-bool SnapshotManager::CollapseSnapshotDevice(LockedFile* lock, const std::string& name,
+bool SnapshotManager::CollapseSnapshotDevice(const std::string& name,
                                              const SnapshotStatus& status) {
     uint64_t snapshot_sectors = status.snapshot_size() / kSectorSize;
     if (snapshot_sectors * kSectorSize != status.snapshot_size()) {
@@ -1868,27 +1818,10 @@ bool SnapshotManager::CollapseSnapshotDevice(LockedFile* lock, const std::string
         return false;
     }
 
-    if (!UpdateUsesUserSnapshots(lock)) {
-        // Attempt to delete the snapshot device if one still exists. Nothing
-        // should be depending on the device, and device-mapper should have
-        // flushed remaining I/O. We could in theory replace with dm-zero (or
-        // re-use the table above), but for now it's better to know why this
-        // would fail.
-        //
-        // Furthermore, we should not be trying to unmap for userspace snapshot
-        // as unmap will fail since dm-user itself was a snapshot device prior
-        // to switching of tables. Unmap will fail as the device will be mounted
-        // by system partitions
-        if (status.using_snapuserd()) {
-            auto dm_user_name = GetSnapshotCowName(name, GetSnapshotDriver(lock));
-            UnmapDmUserDevice(dm_user_name);
-        }
-    }
-
     // We can't delete base device immediately as daemon holds a reference.
     // Make sure we wait for all the worker threads to terminate and release
     // the reference
-    if (UpdateUsesUserSnapshots(lock) && EnsureSnapuserdConnected()) {
+    if (EnsureSnapuserdConnected()) {
         if (!snapuserd_client_->WaitForDeviceDelete(name)) {
             LOG(ERROR) << "Failed to wait for " << name << " control device to delete";
         }
@@ -1964,7 +1897,7 @@ bool SnapshotManager::PerformInitTransition(InitTransition transition,
         return false;
     }
 
-    if (UpdateUsesUserSnapshots(lock.get()) && transition == InitTransition::SELINUX_DETACH) {
+    if (transition == InitTransition::SELINUX_DETACH) {
         snapuserd_argv->emplace_back("-user_snapshot");
         if (UpdateUsesIouring(lock.get())) {
             snapuserd_argv->emplace_back("-io_uring");
@@ -2058,14 +1991,9 @@ bool SnapshotManager::PerformInitTransition(InitTransition transition,
         }
 
         if (transition == InitTransition::SELINUX_DETACH) {
-            if (!UpdateUsesUserSnapshots(lock.get())) {
-                auto message = misc_name + "," + cow_image_device + "," + source_device;
-                snapuserd_argv->emplace_back(std::move(message));
-            } else {
-                auto message = misc_name + "," + cow_image_device + "," + source_device + "," +
-                               base_path_merge;
-                snapuserd_argv->emplace_back(std::move(message));
-            }
+            auto message = misc_name + "," + cow_image_device + "," + source_device + "," +
+                           base_path_merge;
+            snapuserd_argv->emplace_back(std::move(message));
             SetReadAheadSize(cow_image_device, snapshot_status.read_ahead_size());
             SetReadAheadSize(source_device, snapshot_status.read_ahead_size());
 
@@ -2092,13 +2020,8 @@ bool SnapshotManager::PerformInitTransition(InitTransition transition,
             }
         }
         uint64_t base_sectors;
-        if (!UpdateUsesUserSnapshots(lock.get())) {
-            base_sectors =
-                    snapuserd_client_->InitDmUserCow(misc_name, cow_image_device, source_device);
-        } else {
-            base_sectors = snapuserd_client_->InitDmUserCow(misc_name, cow_image_device,
-                                                            source_device, base_path_merge);
-        }
+        base_sectors = snapuserd_client_->InitDmUserCow(misc_name, cow_image_device, source_device,
+                                                        base_path_merge);
 
         if (base_sectors == 0) {
             // Unrecoverable as metadata reads from cow device failed
@@ -2457,37 +2380,6 @@ uint32_t SnapshotManager::GetVerificationBlockSize(LockedFile* lock) {
 uint32_t SnapshotManager::GetNumVerificationThreads(LockedFile* lock) {
     SnapshotUpdateStatus update_status = ReadSnapshotUpdateStatus(lock);
     return update_status.num_verification_threads();
-}
-
-bool SnapshotManager::UpdateUsesUserSnapshots() {
-    // This and the following function is constantly
-    // invoked during snapshot merge. We want to avoid
-    // constantly reading from disk. Hence, store this
-    // value in memory.
-    //
-    // Furthermore, this value in the disk is set
-    // only when OTA is applied and doesn't change
-    // during merge phase. Hence, once we know that
-    // the value is read from disk the very first time,
-    // it is safe to read successive checks from memory.
-
-    if (is_snapshot_userspace_.has_value()) {
-        return is_snapshot_userspace_.value();
-    }
-
-    auto lock = LockShared();
-    if (!lock) return false;
-
-    return UpdateUsesUserSnapshots(lock.get());
-}
-
-bool SnapshotManager::UpdateUsesUserSnapshots(LockedFile* lock) {
-    if (!is_snapshot_userspace_.has_value()) {
-        SnapshotUpdateStatus update_status = ReadSnapshotUpdateStatus(lock);
-        is_snapshot_userspace_ = update_status.userspace_snapshots();
-    }
-
-    return is_snapshot_userspace_.value();
 }
 
 bool SnapshotManager::ListSnapshots(LockedFile* lock, std::vector<std::string>* snapshots,
@@ -2966,13 +2858,6 @@ bool SnapshotManager::UnmapCowDevices(LockedFile* lock, const std::string& name)
     CHECK(lock);
     if (!EnsureImageManager()) return false;
 
-    if (UpdateUsesSnapuserd(lock) && !UpdateUsesUserSnapshots(lock)) {
-        auto dm_user_name = GetSnapshotCowName(name, GetSnapshotDriver(lock));
-        if (!UnmapDmUserDevice(dm_user_name)) {
-            return false;
-        }
-    }
-
     if (!DeleteDeviceIfExists(GetCowName(name), 4000ms)) {
         LOG(ERROR) << "Cannot unmap: " << GetCowName(name);
         return false;
@@ -3016,11 +2901,24 @@ bool SnapshotManager::UnmapUserspaceSnapshotDevice(LockedFile* lock,
                                                    const std::string& snapshot_name) {
     auto snapshot_driver = GetSnapshotDriver(lock);
     auto dm_user_name = GetSnapshotCowName(snapshot_name, snapshot_driver);
-    if (dm_.GetState(dm_user_name) == DmDeviceState::INVALID) {
+    auto state = dm_.GetState(dm_user_name);
+    if (state == DmDeviceState::INVALID) {
         return true;
     }
     DeviceMapper::TargetInfo target;
     auto is_mapped = IsSnapshotDevice(snapshot_name, &target);
+
+    // b/479113971
+    //
+    // this check is just for cuttlefish instance to pass update_engine_integration tests. On
+    // startup, CF has a system_b partition for storing system_other. This is an active DM device
+    // that is not mapped. For regular OTA, we write snapshot status to mark system_b as inactive,
+    // but in testing we don't write this status and fail when we attempt to read the status.
+    if (!is_mapped && state == DmDeviceState::ACTIVE) {
+        LOG(INFO) << "Probably not a snapshot , returning unmap snapshot true for: "
+                  << snapshot_name;
+        return true;
+    }
 
     CHECK(lock);
 
@@ -3717,8 +3615,6 @@ Return SnapshotManager::CreateUpdateSnapshots(const DeltaArchiveManifest& manife
         LOG(INFO) << "Virtual A/B using dm-snapshot";
     }
 
-    is_snapshot_userspace_.emplace(userspace_snapshots);
-
     if (!device()->IsTestDevice() && using_snapuserd) {
         // Terminate stale daemon if any
         std::unique_ptr<SnapuserdClient> snapuserd_client = std::move(snapuserd_client_);
@@ -4271,8 +4167,8 @@ bool SnapshotManager::HandleImminentDataWipe(const std::function<void()>& callba
                 // is initiated before Merge was started. If we are under OTA, we are on
                 // target slot, and slot was marked successful, this means we should prefer
                 // merging instead of rollback.
-                 if (device_->IsSlotMarkedSuccessful(
-                                  SlotNumberForSlotSuffix(device_->GetSlotSuffix()))) {
+                if (device_->IsSlotMarkedSuccessful(
+                            SlotNumberForSlotSuffix(device_->GetSlotSuffix()))) {
                     LOG(INFO) << "Slot is marked successful, allowing wipe and merge.";
                     try_merge = true;
                     break;
