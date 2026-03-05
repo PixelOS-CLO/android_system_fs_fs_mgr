@@ -108,7 +108,7 @@ class ICowWriter {
     // Open an ICowReader for this writer. The reader will be a snapshot of the
     // current operations in the writer; new writes after OpenReader() will not
     // be reflected.
-    virtual std::unique_ptr<ICowReader> OpenReader() = 0;
+    virtual std::unique_ptr<ICowReader> OpenReader(bool is_merge = true) = 0;
 
     // Open a file descriptor. This allows reading and seeing through the cow
     // as if it were a normal file. The optional source_device must be a valid

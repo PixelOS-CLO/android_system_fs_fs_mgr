@@ -119,12 +119,12 @@ bool CowReader::InitForMerge(android::base::unique_fd&& fd) {
     return true;
 }
 
-bool CowReader::Parse(android::base::unique_fd&& fd, std::optional<uint64_t> label) {
+bool CowReader::Parse(android::base::unique_fd&& fd, std::optional<uint64_t> label, bool is_merge) {
     owned_fd_ = std::move(fd);
-    return Parse(android::base::borrowed_fd{owned_fd_}, label);
+    return Parse(android::base::borrowed_fd{owned_fd_}, label, is_merge);
 }
 
-bool CowReader::Parse(android::base::borrowed_fd fd, std::optional<uint64_t> label) {
+bool CowReader::Parse(android::base::borrowed_fd fd, std::optional<uint64_t> label, bool is_merge) {
     fd_ = fd;
 
     if (!ReadCowHeader(fd, &header_)) {
@@ -161,7 +161,7 @@ bool CowReader::Parse(android::base::borrowed_fd fd, std::optional<uint64_t> lab
     xor_data_loc_ = parser->xor_data_loc();
 
     // If we're resuming a write, we're not ready to merge
-    if (label.has_value()) return true;
+    if (label.has_value() || !is_merge) return true;
     return PrepMergeOps();
 }
 
@@ -343,10 +343,13 @@ bool CowReader::PrepMergeOps() {
         ops_->clear();
         ops_ = merge_ops_buffer;
         ops_->shrink_to_fit();
+        LOG(INFO) << "Done preparing for merge, op buffer size " << ops_->size();
     } else {
         for (auto block : merge_op_blocks) {
             block_pos_index_->push_back(block_map.at(block));
         }
+        LOG(INFO) << "Done preparing for iterate, block idx buffer size "
+                  << block_pos_index_->size();
     }
 
     block_map.clear();
