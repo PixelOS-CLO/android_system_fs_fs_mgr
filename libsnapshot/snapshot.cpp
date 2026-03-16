@@ -2908,23 +2908,21 @@ bool SnapshotManager::UnmapUserspaceSnapshotDevice(LockedFile* lock,
     DeviceMapper::TargetInfo target;
     auto is_mapped = IsSnapshotDevice(snapshot_name, &target);
 
-    // b/479113971
-    //
-    // this check is just for cuttlefish instance to pass update_engine_integration tests. On
-    // startup, CF has a system_b partition for storing system_other. This is an active DM device
-    // that is not mapped. For regular OTA, we write snapshot status to mark system_b as inactive,
-    // but in testing we don't write this status and fail when we attempt to read the status.
-    if (!is_mapped && state == DmDeviceState::ACTIVE) {
-        LOG(INFO) << "Probably not a snapshot , returning unmap snapshot true for: "
-                  << snapshot_name;
-        return true;
-    }
-
     CHECK(lock);
 
     SnapshotStatus snapshot_status;
 
     if (!ReadSnapshotStatus(lock, snapshot_name, &snapshot_status)) {
+        // this check is just for CF to pass update_engine_integration tests. On
+        // startup, CF has a system_b partition for storing system_other. This is an active DM
+        // device that is not mapped. For regular OTA, we write snapshot status to mark system_b as
+        // inactive, but in testing we don't write this status and fail when we attempt to read the
+        // status.
+        if (DeleteDeviceIfExists(snapshot_name)) {
+            LOG(INFO) << "deleted active device that is not a snapshot " << snapshot_name;
+            return true;
+        }
+        LOG(ERROR) << "Could not delete device: " << snapshot_name;
         return false;
     }
     // If the merge is complete, then we switch dm tables which is equivalent
