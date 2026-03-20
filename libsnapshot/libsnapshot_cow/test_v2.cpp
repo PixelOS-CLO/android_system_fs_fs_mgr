@@ -66,7 +66,7 @@ TEST_F(CowTest, CopyContiguous) {
     ASSERT_EQ(lseek(cow_->fd, 0, SEEK_SET), 0);
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     const auto& header = reader.GetHeader();
     ASSERT_EQ(header.prefix.magic, kCowMagicNumber);
@@ -114,7 +114,7 @@ TEST_F(CowTest, ReadWrite) {
     ASSERT_EQ(lseek(cow_->fd, 0, SEEK_SET), 0);
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     const auto& header = reader.GetHeader();
     ASSERT_EQ(header.prefix.magic, kCowMagicNumber);
@@ -189,7 +189,7 @@ TEST_F(CowTest, ReadWriteXor) {
     ASSERT_EQ(lseek(cow_->fd, 0, SEEK_SET), 0);
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     const auto& header = reader.GetHeader();
     ASSERT_EQ(header.prefix.magic, kCowMagicNumber);
@@ -264,7 +264,7 @@ TEST_F(CowTest, CompressGz) {
     ASSERT_EQ(lseek(cow_->fd, 0, SEEK_SET), 0);
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     auto iter = reader.GetOpIter();
     ASSERT_NE(iter, nullptr);
@@ -316,7 +316,7 @@ TEST_P(CompressionTest, ThreadedBatchWrites) {
     ASSERT_EQ(lseek(cow_->fd, 0, SEEK_SET), 0);
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     auto iter = reader.GetOpIter();
     ASSERT_NE(iter, nullptr);
@@ -390,7 +390,7 @@ TEST_P(CompressionTest, NoBatchWrites) {
     ASSERT_EQ(lseek(cow_->fd, 0, SEEK_SET), 0);
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     auto iter = reader.GetOpIter();
     ASSERT_NE(iter, nullptr);
@@ -510,7 +510,7 @@ TEST_F(CowTest, ClusterCompressGz) {
     ASSERT_EQ(lseek(cow_->fd, 0, SEEK_SET), 0);
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     auto iter = reader.GetOpIter();
     ASSERT_NE(iter, nullptr);
@@ -569,7 +569,7 @@ TEST_F(CowTest, CompressTwoBlocks) {
     ASSERT_EQ(lseek(cow_->fd, 0, SEEK_SET), 0);
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     auto iter = reader.GetOpIter();
     ASSERT_NE(iter, nullptr);
@@ -642,7 +642,7 @@ TEST_F(CowTest, AppendLabelSmall) {
     // Read back both operations, and label.
     CowReader reader;
     uint64_t label;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
     ASSERT_TRUE(reader.GetLastLabel(&label));
     ASSERT_EQ(label, 3);
 
@@ -709,7 +709,7 @@ TEST_F(CowTest, AppendLabelMissing) {
 
     // Read back both operations.
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     auto iter = reader.GetOpIter();
     ASSERT_NE(iter, nullptr);
@@ -767,7 +767,7 @@ TEST_F(CowTest, AppendExtendedCorrupted) {
 
     // Read back all valid operations
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     auto iter = reader.GetOpIter();
     ASSERT_NE(iter, nullptr);
@@ -816,7 +816,7 @@ TEST_F(CowTest, AppendbyLabel) {
 
     // Read back all ops
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     std::string sink(options.block_size, '\0');
 
@@ -897,7 +897,7 @@ TEST_F(CowTest, ClusterTest) {
 
     // Read back all ops
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     std::string sink(data.size(), '\0');
 
@@ -994,7 +994,7 @@ TEST_F(CowTest, ClusterAppendTest) {
     // Read back both operations, plus cluster op at end
     CowReader reader;
     uint64_t label;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
     ASSERT_TRUE(reader.GetLastLabel(&label));
     ASSERT_EQ(label, 50);
 
@@ -1048,7 +1048,7 @@ TEST_F(CowTest, AppendAfterFinalize) {
 
     // COW should be valid.
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 }
 
 AssertionResult WriteDataBlock(ICowWriter* writer, uint64_t new_block, std::string data) {
@@ -1104,7 +1104,7 @@ TEST_F(CowTest, ResumeMidCluster) {
     ASSERT_EQ(lseek(cow_->fd, 0, SEEK_SET), 0);
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     auto iter = reader.GetOpIter();
     size_t num_replace = 0;
@@ -1165,7 +1165,7 @@ TEST_F(CowTest, ResumeEndCluster) {
     ASSERT_EQ(lseek(cow_->fd, 0, SEEK_SET), 0);
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     auto iter = reader.GetOpIter();
     size_t num_replace = 0;
@@ -1217,7 +1217,7 @@ TEST_F(CowTest, DeleteMidCluster) {
     ASSERT_EQ(lseek(cow_->fd, 0, SEEK_SET), 0);
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     auto iter = reader.GetOpIter();
     size_t num_replace = 0;
@@ -1538,7 +1538,7 @@ TEST_F(CowTest, DecompressIncompressibleBlock) {
     ASSERT_TRUE(writer->Finalize());
 
     CowReader reader;
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     auto iter = reader.GetOpIter();
     ASSERT_NE(iter, nullptr);

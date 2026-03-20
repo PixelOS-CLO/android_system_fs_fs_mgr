@@ -2624,11 +2624,18 @@ bool SnapshotManager::MapPartitionWithSnapshot(LockedFile* lock,
         if (live_snapshot_status->state() == SnapshotState::NONE ||
             live_snapshot_status->cow_partition_size() + live_snapshot_status->cow_file_size() ==
                     0) {
-            LOG(WARNING) << "Snapshot status for " << params.GetPartitionName()
+
+            LOG(ERROR) << "Snapshot status for " << params.GetPartitionName()
                          << " is invalid, ignoring: state = "
                          << SnapshotState_Name(live_snapshot_status->state())
                          << ", cow_partition_size = " << live_snapshot_status->cow_partition_size()
                          << ", cow_file_size = " << live_snapshot_status->cow_file_size();
+            if (ReadUpdateState(lock) == UpdateState::Initiated) {
+                // If we lost snapshot status while applying an OTA, we must not proceed.
+                LOG(ERROR) << "Snapshot status is corrupt, OTA must be discarded.";
+                return false;
+            }
+
             live_snapshot_status.reset();
         }
     } while (0);

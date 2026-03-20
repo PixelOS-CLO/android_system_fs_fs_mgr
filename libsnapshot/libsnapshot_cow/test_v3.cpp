@@ -150,7 +150,7 @@ TEST_F(CowTestV3, ZeroOp) {
     ASSERT_TRUE(writer->AddZeroBlocks(1, 2));
     ASSERT_TRUE(writer->Finalize());
 
-    CowReader reader;
+    CowReader reader(CowReader::ReaderFlags::USERSPACE_MERGE, false);
     ASSERT_TRUE(reader.Parse(cow_->fd));
     ASSERT_EQ(reader.header_v3().op_count, 2);
 
@@ -224,7 +224,7 @@ TEST_F(CowTestV3, BigReplaceOp) {
     ASSERT_TRUE(writer->AddRawBlocks(5, data.data(), data.size()));
     ASSERT_TRUE(writer->Finalize());
 
-    CowReader reader;
+    CowReader reader(CowReader::ReaderFlags::USERSPACE_MERGE, false);
     ASSERT_TRUE(reader.Parse(cow_->fd));
 
     const auto& header = reader.header_v3();
@@ -265,7 +265,7 @@ TEST_F(CowTestV3, ConsecutiveReplaceOp) {
     ASSERT_TRUE(writer->AddRawBlocks(5, data.data(), data.size()));
     ASSERT_TRUE(writer->Finalize());
 
-    CowReader reader;
+    CowReader reader(CowReader::ReaderFlags::USERSPACE_MERGE, false);
     ASSERT_TRUE(reader.Parse(cow_->fd));
 
     const auto& header = reader.header_v3();
@@ -433,7 +433,7 @@ TEST_F(CowTestV3, AllOpsWithCompression) {
 
     CowReader reader;
 
-    ASSERT_TRUE(reader.Parse(cow_->fd));
+    ASSERT_TRUE(reader.Parse(cow_->fd, std::nullopt, false));
 
     const auto& header = reader.header_v3();
     ASSERT_EQ(header.prefix.magic, kCowMagicNumber);
