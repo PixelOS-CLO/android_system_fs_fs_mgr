@@ -82,8 +82,6 @@ using namespace std::chrono_literals;
 
 bool fs_mgr_is_device_unlocked();
 
-bool fs_mgr_is_f2fs(const std::string& blk_device);
-
 bool fs_mgr_filesystem_available(const std::string& filesystem);
 std::string fs_mgr_get_context(const std::string& mount_point);
 

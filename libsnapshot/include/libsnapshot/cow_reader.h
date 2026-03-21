@@ -47,6 +47,10 @@ class ICowReader {
     // Return the last valid label
     virtual bool GetLastLabel(uint64_t* label) = 0;
 
+    // Release internal cache for supporting GetOpIter*() functions
+    // After calling this function, GetOpIter() can no longer be used.
+    virtual bool ClearOpsCache() = 0;
+
     // Return an iterator for retrieving CowOperation entries.
     virtual std::unique_ptr<ICowOpIter> GetOpIter(bool merge_progress) = 0;
 
@@ -67,7 +71,7 @@ class ICowReader {
     // Partial reads are not possible unless |buffer_size| is less than the
     // operation block size.
     //
-    // The operation pointer must derive from ICowOpIter::Get().
+    // The content of operation struct must derive from ICowOpIter::Get().
     virtual ssize_t ReadData(const CowOperation* op, void* buffer, size_t buffer_size,
                              size_t ignore_bytes = 0) = 0;
 
@@ -167,10 +171,17 @@ class CowReader final : public ICowReader {
     uint32_t GetMaxCompressionSize();
 
     void UpdateMergeOpsCompleted(int num_merge_ops) { header_.num_merge_ops += num_merge_ops; }
+    bool ClearOpsCache() override {
+        ops_.reset();
+        return true;
+    }
 
   private:
+    std::unique_ptr<ICowOpIter> GetRevOpIter(bool merge_progress = false);
     bool ParseV2(android::base::borrowed_fd fd, std::optional<uint64_t> label);
     bool PrepMergeOps();
+    bool GetMergeOrder(std::vector<uint32_t>* merge_op_blocks);
+    bool VerifyMergeSequence(const std::vector<uint32_t>& vec) const;
     // sequence data is stored as an operation with actual data residing in the data offset.
     bool GetSequenceDataV2(std::vector<uint32_t>* sequence_data);
     // v3 of the cow writes sequence data within its own separate sequence buffer.
@@ -186,10 +197,8 @@ class CowReader final : public ICowReader {
     std::optional<uint64_t> last_label_;
     std::shared_ptr<std::vector<CowOperation>> ops_;
     uint64_t merge_op_start_{};
-    std::shared_ptr<std::vector<int>> block_pos_index_;
     uint64_t num_total_data_ops_{};
     uint64_t num_ordered_ops_to_merge_{};
-    bool has_seq_ops_{};
     std::shared_ptr<std::unordered_map<uint64_t, uint64_t>> xor_data_loc_;
     ReaderFlags reader_flag_;
     bool is_merge_{};

@@ -39,7 +39,7 @@ CompressedSnapshotReader::CompressedSnapshotReader(std::unique_ptr<ICowReader>&&
     block_size_ = header.block_size;
 
     // Populate the operation map.
-    op_iter_ = cow_->GetOpIter(false);
+    auto op_iter_ = cow_->GetOpIter(false);
     size_t total_block_count = 0;
     const bool use_extent_map = com::android::libsnapshot::memory_efficient_data_structures();
     while (!op_iter_->AtEnd()) {
@@ -73,6 +73,8 @@ CompressedSnapshotReader::CompressedSnapshotReader(std::unique_ptr<ICowReader>&&
         op_iter_->Next();
     }
     if (use_extent_map) {
+        op_iter_.reset();
+        cow_->ClearOpsCache();
         LOG(INFO) << "ExtentMap size " << extent_map_.Size();
         LOG(INFO) << "Total block count in ExtentMap " << total_block_count;
     }

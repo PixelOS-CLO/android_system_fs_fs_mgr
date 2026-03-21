@@ -128,7 +128,6 @@ class CompressedSnapshotReader : public chromeos_update_engine::FileDescriptor {
     android::base::borrowed_fd GetSourceFd();
 
     std::unique_ptr<ICowReader> cow_;
-    std::unique_ptr<ICowOpIter> op_iter_;
     uint32_t block_size_ = 0;
 
     std::optional<std::string> source_device_;
