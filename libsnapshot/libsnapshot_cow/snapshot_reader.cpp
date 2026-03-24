@@ -18,6 +18,9 @@
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
+#include <com_android_libsnapshot.h>
+#include "libsnapshot/cow_format.h"
+#include "libsnapshot_cow/extent_map.h"
 
 namespace android {
 namespace snapshot {
@@ -30,12 +33,15 @@ CompressedSnapshotReader::CompressedSnapshotReader(std::unique_ptr<ICowReader>&&
     : cow_(std::move(cow)),
       block_size_(cow_->GetHeader().block_size),
       source_device_(source_device),
-      block_device_size_(block_dev_size.value_or(0)) {
+      block_device_size_(block_dev_size.value_or(0)),
+      extent_map_(CowOpMerge{}) {
     const auto& header = cow_->GetHeader();
     block_size_ = header.block_size;
 
     // Populate the operation map.
     op_iter_ = cow_->GetOpIter(false);
+    size_t total_block_count = 0;
+    const bool use_extent_map = com::android::libsnapshot::memory_efficient_data_structures();
     while (!op_iter_->AtEnd()) {
         const CowOperation* op = op_iter_->Get();
         if (IsMetadataOp(*op)) {
@@ -47,17 +53,28 @@ CompressedSnapshotReader::CompressedSnapshotReader(std::unique_ptr<ICowReader>&&
         if (op->type() == kCowReplaceOp) {
             num_blocks = (CowOpCompressionSize(op, block_size_) / block_size_);
         }
-        if (op->new_block >= ops_.size()) {
-            ops_.resize(op->new_block + num_blocks, nullptr);
+        if (use_extent_map) {
+            auto cow_op = CowOp::Convert(*op);
+            CHECK(cow_op.has_value());
+            CHECK(extent_map_.Insert(Extent(op->new_block, num_blocks), *cow_op));
+        } else {
+            if (op->new_block >= ops_.size()) {
+                ops_.resize(op->new_block + num_blocks, nullptr);
+            }
+            size_t vec_index = op->new_block;
+            while (num_blocks) {
+                ops_[vec_index] = op;
+                num_blocks -= 1;
+                vec_index += 1;
+            }
         }
+        total_block_count += num_blocks;
 
-        size_t vec_index = op->new_block;
-        while (num_blocks) {
-            ops_[vec_index] = op;
-            num_blocks -= 1;
-            vec_index += 1;
-        }
         op_iter_->Next();
+    }
+    if (use_extent_map) {
+        LOG(INFO) << "ExtentMap size " << extent_map_.Size();
+        LOG(INFO) << "Total block count in ExtentMap " << total_block_count;
     }
 }
 
@@ -153,12 +170,28 @@ ssize_t CompressedSnapshotReader::ReadBlock(uint64_t chunk, size_t start_offset,
     // one chunk.
     CHECK(start_offset + bytes_to_read <= block_size_);
 
-    const CowOperation* op = nullptr;
-    if (chunk < ops_.size()) {
-        op = ops_[chunk];
+    std::optional<CowOperation> op;
+    CowOperationType type = kCowClusterOp;
+    if (!extent_map_.Empty()) {
+        std::optional<CowOp> cow_op = extent_map_.Get(chunk);
+        if (cow_op) {
+            type = cow_op->type();
+            op = cow_op->ToDiskRepr(chunk);
+            if (!op.has_value()) {
+                LOG(ERROR) << "Failed to convert block " << chunk << " type " << cow_op->type()
+                           << " new_block " << cow_op->new_block << " " << " data_length "
+                           << cow_op->data_length << " num_blocks " << cow_op->num_blocks();
+                return -1;
+            }
+        }
+    } else {
+        if (chunk < ops_.size() && ops_[chunk]) {
+            op = *ops_[chunk];
+            type = op->type();
+        }
     }
 
-    if (!op || op->type() == kCowCopyOp) {
+    if (!op || type == kCowCopyOp) {
         borrowed_fd fd = GetSourceFd();
         if (fd < 0) {
             // GetSourceFd sets errno.
@@ -166,8 +199,8 @@ ssize_t CompressedSnapshotReader::ReadBlock(uint64_t chunk, size_t start_offset,
         }
 
         if (op) {
-            uint64_t source_offset;
-            if (!cow_->GetSourceOffset(op, &source_offset)) {
+            uint64_t source_offset = 0;
+            if (!cow_->GetSourceOffset(&op.value(), &source_offset)) {
                 LOG(ERROR) << "GetSourceOffset failed in CompressedSnapshotReader for op: " << *op;
                 return false;
             }
@@ -180,24 +213,24 @@ ssize_t CompressedSnapshotReader::ReadBlock(uint64_t chunk, size_t start_offset,
             // ReadFullyAtOffset sets errno.
             return -1;
         }
-    } else if (op->type() == kCowZeroOp) {
+    } else if (type == kCowZeroOp) {
         memset(buffer, 0, bytes_to_read);
-    } else if (op->type() == kCowReplaceOp) {
-        size_t buffer_size = CowOpCompressionSize(op, block_size_);
+    } else if (type == kCowReplaceOp) {
+        const size_t buffer_size = CowOpCompressionSize(&op.value(), block_size_);
         uint8_t temp_buffer[buffer_size];
-        if (cow_->ReadData(op, temp_buffer, buffer_size, 0) < buffer_size) {
+        if (cow_->ReadData(&op.value(), temp_buffer, buffer_size, 0) < buffer_size) {
             LOG(ERROR) << "CompressedSnapshotReader failed to read replace op: buffer_size: "
                        << buffer_size << "start_offset: " << start_offset;
             errno = EIO;
             return -1;
         }
         off_t block_offset{};
-        if (!GetBlockOffset(op, chunk, block_size_, &block_offset)) {
+        if (!GetBlockOffset(&op.value(), chunk, block_size_, &block_offset)) {
             LOG(ERROR) << "GetBlockOffset failed";
             return -1;
         }
         std::memcpy(buffer, (char*)temp_buffer + block_offset + start_offset, bytes_to_read);
-    } else if (op->type() == kCowXorOp) {
+    } else if (type == kCowXorOp) {
         borrowed_fd fd = GetSourceFd();
         if (fd < 0) {
             // GetSourceFd sets errno.
@@ -205,7 +238,7 @@ ssize_t CompressedSnapshotReader::ReadBlock(uint64_t chunk, size_t start_offset,
         }
 
         uint64_t source_offset;
-        if (!cow_->GetSourceOffset(op, &source_offset)) {
+        if (!cow_->GetSourceOffset(&op.value(), &source_offset)) {
             LOG(ERROR) << "GetSourceOffset failed in CompressedSnapshotReader for op: " << *op;
             return false;
         }
@@ -218,7 +251,7 @@ ssize_t CompressedSnapshotReader::ReadBlock(uint64_t chunk, size_t start_offset,
             return -1;
         }
 
-        if (cow_->ReadData(op, buffer, bytes_to_read, start_offset) < bytes_to_read) {
+        if (cow_->ReadData(&op.value(), buffer, bytes_to_read, start_offset) < bytes_to_read) {
             LOG(ERROR) << "CompressedSnapshotReader failed to read xor op";
             errno = EIO;
             return -1;
