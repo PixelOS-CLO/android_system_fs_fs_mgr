@@ -91,7 +91,6 @@ filegroup {
         "android/snapshot/snapshot.proto",
         "device_info.cpp",
         "snapshot.cpp",
-        "snapshot_stats.cpp",
         "snapshot_stub.cpp",
         "snapshot_metadata_updater.cpp",
         "partition_cow_creator.cpp",
@@ -104,6 +103,7 @@ filegroup {
 cc_library_headers {
     name: "libsnapshot_headers",
     recovery_available: true,
+    ramdisk_available: true,
     defaults: ["libsnapshot_defaults"],
     export_include_dirs: ["include"],
 }

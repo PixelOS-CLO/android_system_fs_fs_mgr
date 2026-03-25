@@ -17,23 +17,14 @@
 #include <poll.h>
 #include <sys/eventfd.h>
 
-#include <cstdio>
 #include <cstring>
-#include <functional>
-#include <future>
-#include <iostream>
 #include <mutex>
-#include <optional>
-#include <queue>
-#include <sstream>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include <android-base/unique_fd.h>
 #include <snapuserd/block_server.h>
 #include "handler_manager.h"
-#include "snapuserd_core.h"
 
 namespace android {
 namespace snapshot {

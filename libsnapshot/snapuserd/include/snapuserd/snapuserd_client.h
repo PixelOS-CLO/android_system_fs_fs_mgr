@@ -83,9 +83,6 @@ class SnapuserdClient {
     std::optional<std::string> GetDeviceName(const std::string& misc_name);
     bool DetachSnapuserd();
 
-    // Returns true if the snapuserd instance supports bridging a socket to second-stage init.
-    bool SupportsSecondStageSocketHandoff();
-
     // Returns true if the merge is started(or resumed from crash).
     bool InitiateMerge(const std::string& misc_name);
 

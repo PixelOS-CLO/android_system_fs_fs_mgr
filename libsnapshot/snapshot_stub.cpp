@@ -16,8 +16,6 @@
 
 #include <android-base/logging.h>
 
-#include <libsnapshot/snapshot_stats.h>
-
 using android::fs_mgr::CreateLogicalPartitionParams;
 using chromeos_update_engine::DeltaArchiveManifest;
 using chromeos_update_engine::FileDescriptor;
@@ -121,34 +119,6 @@ bool SnapshotManagerStub::UpdateUsesSnapuserd() {
     return false;
 }
 
-class SnapshotMergeStatsStub : public ISnapshotMergeStats {
-    bool Start() override { return false; }
-    void set_state(android::snapshot::UpdateState) override {}
-    uint64_t cow_file_size() override { return 0; }
-    std::unique_ptr<Result> Finish() override { return nullptr; }
-    uint64_t total_cow_size_bytes() override { return 0; }
-    uint64_t estimated_cow_size_bytes() override { return 0; }
-    void set_boot_complete_time_ms(uint32_t) override {}
-    uint32_t boot_complete_time_ms() override { return 0; }
-    void set_boot_complete_to_merge_start_time_ms(uint32_t) override {}
-    uint32_t boot_complete_to_merge_start_time_ms() override { return 0; }
-    void set_merge_failure_code(MergeFailureCode) override {}
-    MergeFailureCode merge_failure_code() override { return MergeFailureCode::Ok; }
-    void set_source_build_fingerprint(const std::string&) override {}
-    std::string source_build_fingerprint() override { return {}; }
-    bool WriteState() override { return false; }
-    SnapshotMergeReport* report() override { return &report_; }
-
-  private:
-    SnapshotMergeReport report_;
-};
-
-ISnapshotMergeStats* SnapshotManagerStub::GetSnapshotMergeStatsInstance() {
-    static SnapshotMergeStatsStub snapshot_merge_stats;
-    LOG(ERROR) << __FUNCTION__ << " should never be called.";
-    return &snapshot_merge_stats;
-}
-
 std::unique_ptr<ICowWriter> SnapshotManagerStub::OpenSnapshotWriter(
         const CreateLogicalPartitionParams&, std::optional<uint64_t>) {
     LOG(ERROR) << __FUNCTION__ << " should never be called.";
@@ -165,25 +135,17 @@ bool SnapshotManagerStub::UnmapAllSnapshots() {
     return false;
 }
 
-void SnapshotManagerStub::UpdateCowStats(ISnapshotMergeStats*) {
+bool SnapshotManagerStub::IsCancelUpdateSafe() {
     LOG(ERROR) << __FUNCTION__ << " should never be called.";
+    return false;
 }
 
-auto SnapshotManagerStub::ReadMergeFailureCode() -> MergeFailureCode {
-    LOG(ERROR) << __FUNCTION__ << " should never be called.";
-    return MergeFailureCode::Ok;
-}
-
-std::string SnapshotManagerStub::ReadSourceBuildFingerprint() {
+SnapshotMergeReport SnapshotManagerStub::ReadMergeReport() {
     LOG(ERROR) << __FUNCTION__ << " should never be called.";
     return {};
 }
 
-void SnapshotManagerStub::SetMergeStatsFeatures(ISnapshotMergeStats*) {
-    LOG(ERROR) << __FUNCTION__ << " should never be called.";
-}
-
-bool SnapshotManagerStub::IsCancelUpdateSafe() {
+bool SnapshotManagerStub::WriteMergeReport(const SnapshotMergeReport&) {
     LOG(ERROR) << __FUNCTION__ << " should never be called.";
     return false;
 }
