@@ -16,6 +16,7 @@
 
 #include <arpa/inet.h>
 #include <cutils/sockets.h>
+#include <errno.h>
 #include <netinet/in.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -215,6 +216,9 @@ bool UserSnapshotServer::Receivemsg(android::base::borrowed_fd fd, const std::st
         if (out.size() != 2) {
             LOG(ERROR) << "Malformed supports message, " << out.size() << " parts";
             return Sendmsg(fd, "fail");
+        }
+        if (out[1] == "second_stage_socket_handoff") {
+            return Sendmsg(fd, "success");
         }
         if (out[1] == "ublk" && IsUblkEnabled()) {
             return Sendmsg(fd, "success");

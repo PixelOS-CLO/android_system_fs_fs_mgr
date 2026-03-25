@@ -63,16 +63,12 @@
 #include <ext4_utils/wipe.h>
 #include <fs_avb/fs_avb.h>
 #include <fs_mgr/file_wait.h>
-#ifndef MICRODROID
 #include <fs_mgr_overlayfs.h>
-#endif
 #include <fscrypt/fscrypt.h>
 #include <fstab/fstab.h>
 #include <libdm/dm.h>
 #include <libdm/loop_control.h>
-#ifndef MICRODROID
 #include <liblp/metadata_format.h>
-#endif
 #include <linux/fs.h>
 #include <linux/loop.h>
 #include <linux/magic.h>
@@ -1566,9 +1562,7 @@ int fs_mgr_mount_all(Fstab* fstab, int mount_mode) {
        ((strncmp(propbuf_buid_type, "eng", 3) == 0) || (strncmp(propbuf_buid_type, "userdebug", 9) == 0)))
         is_ffbm = true;
 
-#ifndef MICRODROID
     bool scratch_can_be_mounted = true;
-#endif
 
     // Keep i int to prevent unsigned integer overflow from (i = top_idx - 1),
     // where top_idx is 0. It will give SIGABRT
@@ -1715,9 +1709,7 @@ int fs_mgr_mount_all(Fstab* fstab, int mount_mode) {
                 userdata_mounted = true;
             }
 
-#ifndef MICRODROID
             MountOverlayfs(attempted_entry, &scratch_can_be_mounted);
-#endif
 
             // Success!  Go get the next one.
             continue;
@@ -2346,7 +2338,6 @@ bool fs_mgr_verity_is_check_at_most_once(const android::fs_mgr::FstabEntry& entr
 }
 
 std::string fs_mgr_get_super_partition_name() {
-#ifndef MICRODROID
     // Devices upgrading to dynamic partitions are allowed to specify a super
     // partition name. This includes cuttlefish, which is a non-A/B device.
     std::string super_partition;
@@ -2357,10 +2348,6 @@ std::string fs_mgr_get_super_partition_name() {
         return super_partition;
     }
     return LP_METADATA_DEFAULT_PARTITION_NAME;
-#else
-    // Microdroid should not use super partition at all
-    return "";
-#endif
 }
 
 bool fs_mgr_create_canonical_mount_point(const std::string& mount_point) {
@@ -2384,7 +2371,6 @@ bool fs_mgr_create_canonical_mount_point(const std::string& mount_point) {
 }
 
 bool fs_mgr_mount_overlayfs_fstab_entry(const FstabEntry& entry) {
-#ifndef MICRODROID
     const auto overlayfs_check_result = android::fs_mgr::CheckOverlayfs();
     if (!overlayfs_check_result.supported) {
         LERROR << __FUNCTION__ << "(): kernel does not support overlayfs";
@@ -2455,10 +2441,6 @@ bool fs_mgr_mount_overlayfs_fstab_entry(const FstabEntry& entry) {
     }
     LINFO << report << ret;
     return true;
-#else
-    (void)entry;
-    return false;
-#endif
 }
 
 bool fs_mgr_load_verity_state(int* mode) {

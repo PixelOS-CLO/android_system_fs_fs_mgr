@@ -21,7 +21,6 @@
 #include <libsnapshot/capabilities.h>
 #include <snapuserd/snapuserd_client.h>
 #include <storage_literals/storage_literals.h>
-#include "android-base/file.h"
 
 #include "snapuserd_daemon.h"
 
