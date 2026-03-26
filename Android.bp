@@ -139,6 +139,56 @@ cc_defaults {
     },
 }
 
+cc_library_static {
+    // A minimal fs_mgr version tailored specifically for Microdroid.
+    // It excludes liblp, dm_linear, overlayfs, and libfiemap dependencies.
+    name: "libfs_mgr.microdroid",
+    defaults: ["fs_mgr_defaults"],
+    export_include_dirs: ["include"],
+    local_include_dirs: ["include/"],
+    cflags: [
+        "-D_FILE_OFFSET_BITS=64",
+        "-DMICRODROID=1",
+    ],
+    srcs: [
+        "blockdev.cpp",
+        "file_wait.cpp",
+        "fs_mgr.cpp",
+        "fs_mgr_format.cpp",
+    ],
+    shared_libs: [
+        "libbase",
+        "libcrypto",
+        "libcrypto_utils",
+        "libcutils",
+        "libext4_utils",
+        "libfec",
+        "liblog",
+        "libselinux",
+    ],
+    static_libs: [
+        "libavb",
+        "libfs_avb",
+    ],
+    export_static_lib_headers: [
+        "libfs_avb",
+        "libfstab",
+    ],
+    whole_static_libs: [
+        "liblogwrap",
+        "libdm",
+        "libext2_uuid",
+        "libfscrypt",
+        "libfstab",
+    ],
+    cppflags: [
+        "-DALLOW_ADBD_DISABLE_VERITY=0",
+    ],
+    header_libs: [
+        "libstorage_literals_headers",
+    ],
+}
+
 // Two variants of libfs_mgr are provided: libfs_mgr and libfs_mgr_binder.
 // Use libfs_mgr in recovery, first-stage-init, or when libfiemap or overlayfs
 // is not used.

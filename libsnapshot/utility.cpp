@@ -289,5 +289,28 @@ bool GetDebugFlag(const std::string& flag) {
     return IsDebuggable() && fetcher->GetBoolProperty(prop_name, false);
 }
 
+std::optional<int> GetDebugFlagInt(const std::string& flag) {
+    if (!IsDebuggable()) {
+        return {};
+    }
+    auto fetcher = IPropertyFetcher::GetInstance();
+    std::string prop_name = "persist.virtual_ab.testing." + flag;
+    std::string value = fetcher->GetProperty(prop_name, "");
+    int int_val;
+    if (!android::base::ParseInt(value, &int_val)) {
+        return {};
+    }
+    return {int_val};
+}
+
+bool RemoveFileIfExists(const std::string& path) {
+    std::string message;
+    if (!android::base::RemoveFileIfExists(path, &message)) {
+        LOG(ERROR) << "Remove failed: " << path << ": " << message;
+        return false;
+    }
+    return true;
+}
+
 }  // namespace snapshot
 }  // namespace android

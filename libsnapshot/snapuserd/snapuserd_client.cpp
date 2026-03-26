@@ -197,16 +197,6 @@ bool SnapuserdClient::WaitForDeviceDelete(const std::string& control_device) {
     return true;
 }
 
-bool SnapuserdClient::SupportsSecondStageSocketHandoff() {
-    std::string msg = "supports,second_stage_socket_handoff";
-    if (!Sendmsg(msg)) {
-        LOG(ERROR) << "Failed to send message " << msg << " to snapuserd";
-        return false;
-    }
-    std::string response = Receivemsg();
-    return response == "success";
-}
-
 bool SnapuserdClient::SupportsUblk() {
     std::string msg = "supports,ublk";
     if (!Sendmsg(msg)) {

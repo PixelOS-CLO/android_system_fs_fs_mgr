@@ -26,8 +26,6 @@ class MockSnapshotManager : public ISnapshotManager {
     MOCK_METHOD(bool, BeginUpdate, (), (override));
     MOCK_METHOD(bool, CancelUpdate, (), (override));
     MOCK_METHOD(bool, FinishedSnapshotWrites, (bool wipe), (override));
-    MOCK_METHOD(void, UpdateCowStats, (ISnapshotMergeStats * stats), (override));
-    MOCK_METHOD(MergeFailureCode, ReadMergeFailureCode, (), (override));
     MOCK_METHOD(bool, InitiateMerge, (), (override));
 
     MOCK_METHOD(UpdateState, ProcessUpdateState,
@@ -59,10 +57,9 @@ class MockSnapshotManager : public ISnapshotManager {
                 (const std::unique_ptr<AutoDevice>& metadata_device), (override));
     MOCK_METHOD(bool, Dump, (std::ostream & os), (override));
     MOCK_METHOD(std::unique_ptr<AutoDevice>, EnsureMetadataMounted, (), (override));
-    MOCK_METHOD(ISnapshotMergeStats*, GetSnapshotMergeStatsInstance, (), (override));
-    MOCK_METHOD(std::string, ReadSourceBuildFingerprint, (), (override));
-    MOCK_METHOD(void, SetMergeStatsFeatures, (ISnapshotMergeStats*), (override));
     MOCK_METHOD(bool, IsCancelUpdateSafe, (), (override));
+    MOCK_METHOD(SnapshotMergeReport, ReadMergeReport, (), (override));
+    MOCK_METHOD(bool, WriteMergeReport, (const SnapshotMergeReport&), (override));
 };
 
 }  // namespace android::snapshot

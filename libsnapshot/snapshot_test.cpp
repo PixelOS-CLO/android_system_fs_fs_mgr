@@ -234,7 +234,7 @@ class SnapshotTest : public ::testing::Test {
             ASSERT_TRUE(AcquireLock());
 
             auto local_lock = std::move(lock_);
-            ASSERT_TRUE(sm->UnmapUserspaceSnapshotDevice(local_lock.get(), snapshot));
+            ASSERT_TRUE(sm->UnmapSnapshot(local_lock.get(), snapshot));
         }
     }
 
@@ -2553,8 +2553,63 @@ TEST_F(SnapshotUpdateTest, MergeSwitchoverInterrupted) {
     ASSERT_TRUE(init->CreateLogicalAndSnapshotPartitions("super", snapshot_timeout_));
     ASSERT_TRUE(init->InitiateMerge());
 
+    auto once = []() -> bool { return false; };
+    ASSERT_EQ(init->ProcessUpdateState(once), UpdateState::Merging);
+
+    // Simulate a reboot.
+    ASSERT_TRUE(UnmapAll());
+    init = NewManagerForFirstStageMount("_b");
+    ASSERT_NE(init, nullptr);
+    ASSERT_TRUE(init->NeedSnapshotsInFirstStageMount());
+    ASSERT_TRUE(init->CreateLogicalAndSnapshotPartitions("super", snapshot_timeout_));
+
     fetcher_->SetProperty("persist.virtual_ab.testing.block_merge_switchover", "false");
     ASSERT_EQ(init->ProcessUpdateState(), UpdateState::MergeCompleted);
+
+    auto report = init->ReadMergeReport();
+    ASSERT_EQ(report.resume_count(), 1);
+}
+
+TEST_F(SnapshotUpdateTest, MergeInterrupted) {
+    auto old_sys_size = GetSize(sys_);
+    auto old_prd_size = GetSize(prd_);
+
+    // Grow |sys| but shrink |prd|.
+    SetSize(sys_, old_sys_size * 2);
+    sys_->set_estimate_cow_size(8_MiB);
+    SetSize(prd_, old_prd_size / 2);
+    prd_->set_estimate_cow_size(1_MiB);
+
+    AddOperationForPartitions();
+
+    ASSERT_TRUE(sm->BeginUpdate());
+    ASSERT_TRUE(sm->CreateUpdateSnapshots(manifest_));
+    ASSERT_TRUE(WriteSnapshots());
+    ASSERT_TRUE(sm->FinishedSnapshotWrites(false));
+    ASSERT_TRUE(UnmapAll());
+
+    auto init = NewManagerForFirstStageMount("_b");
+    ASSERT_NE(init, nullptr);
+    ASSERT_TRUE(init->NeedSnapshotsInFirstStageMount());
+    ASSERT_TRUE(init->CreateLogicalAndSnapshotPartitions("super", snapshot_timeout_));
+
+    fetcher_->SetProperty("persist.virtual_ab.testing.dont_send_merge", "true");
+    ASSERT_TRUE(init->InitiateMerge());
+
+    // Simulate a reboot.
+    ASSERT_TRUE(UnmapAll());
+    init = NewManagerForFirstStageMount("_b");
+    ASSERT_NE(init, nullptr);
+    ASSERT_TRUE(init->NeedSnapshotsInFirstStageMount());
+    ASSERT_TRUE(init->CreateLogicalAndSnapshotPartitions("super", snapshot_timeout_));
+
+    auto callback = []() -> bool { return false; };
+    ASSERT_EQ(init->ProcessUpdateState(callback), UpdateState::Merging);
+    fetcher_->SetProperty("persist.virtual_ab.testing.dont_send_merge", "false");
+    ASSERT_EQ(init->ProcessUpdateState(), UpdateState::MergeCompleted);
+
+    auto report = init->ReadMergeReport();
+    ASSERT_EQ(report.resume_count(), 1);
 }
 
 TEST_F(SnapshotTest, FlagCheck) {
@@ -2708,6 +2763,67 @@ TEST_F(SnapshotUpdateTest, CorruptedSnapshotState) {
 
     // This should fail if we're not on the target slot.
     ASSERT_FALSE(sm->MapAllSnapshots(10s));
+}
+
+TEST_F(SnapshotUpdateTest, MergeReport) {
+    ASSERT_TRUE(RemoveFileIfExists(sm->GetMergeReportFilePath()));
+
+    // Setup update.
+    AddOperationForPartitions();
+    ASSERT_TRUE(sm->BeginUpdate());
+    ASSERT_TRUE(sm->CreateUpdateSnapshots(manifest_));
+    ASSERT_TRUE(WriteSnapshots());
+    ASSERT_TRUE(sm->FinishedSnapshotWrites(false));
+    ASSERT_TRUE(UnmapAll());
+
+    // "Reboot"+merge.
+    auto init = SnapshotManager::New(new TestDeviceInfo(fake_super, "_b"));
+    ASSERT_NE(init, nullptr);
+    ASSERT_TRUE(init->CreateLogicalAndSnapshotPartitions("super", snapshot_timeout_));
+    ASSERT_TRUE(init->InitiateMerge());
+    ASSERT_EQ(init->ProcessUpdateState(), UpdateState::MergeCompleted);
+
+    SnapshotMergeReport report = init->ReadMergeReport();
+    ASSERT_EQ(report.state(), UpdateState::MergeCompleted);
+    ASSERT_EQ(report.merge_failure_code(), MergeFailureCode::Ok);
+    ASSERT_EQ(report.resume_count(), 0);
+    ASSERT_EQ(report.cow_file_size(), 0);
+    ASSERT_TRUE(report.compression_enabled());
+    ASSERT_GT(report.total_cow_size_bytes(), 0);
+    ASSERT_GT(report.estimated_cow_size_bytes(), 0);
+    ASSERT_NE(report.source_build_fingerprint(), "");
+    ASSERT_TRUE(report.userspace_snapshots_used());
+    ASSERT_EQ(report.xor_compression_used(), GetXorCompressionEnabledProperty());
+    ASSERT_EQ(report.iouring_used(), GetIouringEnabledProperty());
+    ASSERT_EQ(report.ublk_used(), GetUblkEnabledProperty());
+    ASSERT_GT(report.merge_total_time_ms(), 0);
+}
+
+TEST_F(SnapshotUpdateTest, MergeReportWithFailure) {
+    ASSERT_TRUE(RemoveFileIfExists(sm->GetMergeReportFilePath()));
+
+    // Setup update.
+    AddOperationForPartitions();
+    ASSERT_TRUE(sm->BeginUpdate());
+    ASSERT_TRUE(sm->CreateUpdateSnapshots(manifest_));
+    ASSERT_TRUE(WriteSnapshots());
+    ASSERT_TRUE(sm->FinishedSnapshotWrites(false));
+    ASSERT_TRUE(UnmapAll());
+
+    // "Reboot"+merge.
+    auto init = SnapshotManager::New(new TestDeviceInfo(fake_super, "_b"));
+    ASSERT_NE(init, nullptr);
+    ASSERT_TRUE(init->CreateLogicalAndSnapshotPartitions("super", snapshot_timeout_));
+    ASSERT_TRUE(init->InitiateMerge());
+
+    fetcher_->SetProperty("persist.virtual_ab.testing.force_merge_failure",
+        std::to_string((int)MergeFailureCode::ReadStatus));
+    ASSERT_EQ(init->ProcessUpdateState(), UpdateState::MergeFailed);
+    fetcher_->SetProperty("persist.virtual_ab.testing.force_merge_failure", "");
+
+    SnapshotMergeReport report = init->ReadMergeReport();
+    ASSERT_EQ(report.state(), UpdateState::MergeFailed);
+    ASSERT_EQ(report.merge_failure_code(), MergeFailureCode::ReadStatus);
 }
 
 class FlashAfterUpdateTest : public SnapshotUpdateTest,

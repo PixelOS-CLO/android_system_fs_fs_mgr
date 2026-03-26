@@ -69,8 +69,6 @@ struct AutoDeleteCowImage;
 struct AutoDeleteSnapshot;
 struct AutoDeviceList;
 struct PartitionCowCreator;
-class ISnapshotMergeStats;
-class SnapshotMergeStats;
 class SnapshotStatus;
 
 using std::chrono::duration_cast;
@@ -147,14 +145,6 @@ class ISnapshotManager {
     // may need to be merged before wiping.
     virtual bool FinishedSnapshotWrites(bool wipe) = 0;
 
-    // Set feature flags on an ISnapshotMergeStats object.
-    virtual void SetMergeStatsFeatures(ISnapshotMergeStats* stats) = 0;
-
-    // Update an ISnapshotMergeStats object with statistics about COW usage.
-    // This should be called before the merge begins as otherwise snapshots
-    // may be deleted.
-    virtual void UpdateCowStats(ISnapshotMergeStats* stats) = 0;
-
     // Initiate a merge on all snapshot devices. This should only be used after an
     // update has been marked successful after booting.
     virtual bool InitiateMerge() = 0;
@@ -189,13 +179,6 @@ class ISnapshotManager {
     // progress with GetUpdateState().
     virtual UpdateState ProcessUpdateState(const std::function<bool()>& callback = {},
                                            const std::function<bool()>& before_cancel = {}) = 0;
-
-    // If ProcessUpdateState() returned MergeFailed, this returns the appropriate
-    // code. Otherwise, MergeFailureCode::Ok is returned.
-    virtual MergeFailureCode ReadMergeFailureCode() = 0;
-
-    // If an update is in progress, return the source build fingerprint.
-    virtual std::string ReadSourceBuildFingerprint() = 0;
 
     // Find the status of the current update, if any.
     //
@@ -308,11 +291,12 @@ class ISnapshotManager {
     //   a.reset() // does nothing
     virtual std::unique_ptr<AutoDevice> EnsureMetadataMounted() = 0;
 
-    // Return the associated ISnapshotMergeStats instance. Never null.
-    virtual ISnapshotMergeStats* GetSnapshotMergeStatsInstance() = 0;
-
     // Return whether cancelling an update is safe. This is for use in recovery.
     virtual bool IsCancelUpdateSafe() = 0;
+
+    // Interact with the merge_stats file.
+    virtual SnapshotMergeReport ReadMergeReport() = 0;
+    virtual bool WriteMergeReport(const SnapshotMergeReport& report) = 0;
 };
 
 class SnapshotManager final : public ISnapshotManager {
@@ -323,8 +307,6 @@ class SnapshotManager final : public ISnapshotManager {
     using DeltaArchiveManifest = chromeos_update_engine::DeltaArchiveManifest;
     using MergeStatus = aidl::android::hardware::boot::MergeStatus;
     using FiemapStatus = android::fiemap::FiemapStatus;
-
-    friend class SnapshotMergeStats;
 
   public:
     ~SnapshotManager();
@@ -371,8 +353,6 @@ class SnapshotManager final : public ISnapshotManager {
     bool BeginUpdate() override;
     bool CancelUpdate() override;
     bool FinishedSnapshotWrites(bool wipe) override;
-    void UpdateCowStats(ISnapshotMergeStats* stats) override;
-    MergeFailureCode ReadMergeFailureCode() override;
     bool InitiateMerge() override;
     UpdateState ProcessUpdateState(const std::function<bool()>& callback = {},
                                    const std::function<bool()>& before_cancel = {}) override;
@@ -396,12 +376,11 @@ class SnapshotManager final : public ISnapshotManager {
             const std::unique_ptr<AutoDevice>& metadata_device) override;
     bool Dump(std::ostream& os) override;
     std::unique_ptr<AutoDevice> EnsureMetadataMounted() override;
-    ISnapshotMergeStats* GetSnapshotMergeStatsInstance() override;
     bool MapAllSnapshots(const std::chrono::milliseconds& timeout_ms = {}) override;
     bool UnmapAllSnapshots() override;
-    std::string ReadSourceBuildFingerprint() override;
-    void SetMergeStatsFeatures(ISnapshotMergeStats* stats) override;
     bool IsCancelUpdateSafe() override;
+    SnapshotMergeReport ReadMergeReport() override;
+    bool WriteMergeReport(const SnapshotMergeReport& report) override;
 
     // We can't use WaitForFile during first-stage init, because ueventd is not
     // running and therefore will not automatically create symlinks. Instead,
@@ -466,6 +445,8 @@ class SnapshotManager final : public ISnapshotManager {
     FRIEND_TEST(SnapshotUpdateTest, CancelInRecovery);
     FRIEND_TEST(SnapshotUpdateTest, MergeRespectsSourceUblkDisabled);
     FRIEND_TEST(SnapshotUpdateTest, DisableUblkViaManifest);
+    FRIEND_TEST(SnapshotUpdateTest, MergeReport);
+    FRIEND_TEST(SnapshotUpdateTest, MergeReportWithFailure);
     friend class SnapshotTest;
     friend class SnapshotUpdateTest;
     friend class FlashAfterUpdateTest;
@@ -646,11 +627,17 @@ class SnapshotManager final : public ISnapshotManager {
     bool WriteSnapshotUpdateStatus(LockedFile* file, const SnapshotUpdateStatus& status);
     std::string GetStateFilePath() const;
 
-    // Interact with /metadata/ota/merge_state.
+    // Interact with /metadata/ota/merge_stats.
     // This file contains information related to the snapshot merge process.
-    std::string GetMergeStateFilePath() const;
+    void UpdateCowStats(LockedFile* lock, SnapshotMergeReport* report);
+    SnapshotMergeReport ReadMergeReport(LockedFile* lock);
+    void RecordMergeResumed(LockedFile* lock);
+    void RecordMergeEndTime(LockedFile* lock, std::optional<MergeFailureCode> failure_code);
+    bool WriteMergeReport(LockedFile* lock, const SnapshotMergeReport& report);
+    std::string GetMergeReportFilePath() const;
 
     // Helpers for merging.
+    bool InitiateOneMerge(const std::string& name);
     MergeFailureCode MergeSecondPhaseSnapshots(LockedFile* lock);
     MergeFailureCode SwitchSnapshotToMerge(LockedFile* lock, const std::string& name);
     MergeFailureCode RewriteSnapshotDeviceTable(const std::string& dm_name);
@@ -775,9 +762,6 @@ class SnapshotManager final : public ISnapshotManager {
 
     // Unmap a dm-user device through snapuserd.
     bool UnmapDmUserDevice(const std::string& dm_user_name);
-
-    // Unmap a dm-user device for user space snapshots
-    bool UnmapUserspaceSnapshotDevice(LockedFile* lock, const std::string& snapshot_name);
 
     CancelResult TryCancelUpdate();
     CancelResult IsCancelUpdateSafe(UpdateState state);
