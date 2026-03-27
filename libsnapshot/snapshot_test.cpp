@@ -2795,7 +2795,7 @@ TEST_F(SnapshotUpdateTest, MergeReport) {
     ASSERT_TRUE(report.userspace_snapshots_used());
     ASSERT_EQ(report.xor_compression_used(), GetXorCompressionEnabledProperty());
     ASSERT_EQ(report.iouring_used(), GetIouringEnabledProperty());
-    ASSERT_EQ(report.ublk_used(), GetUblkEnabledProperty());
+    ASSERT_EQ(report.ublk_used(), IsUblkEnabled());
     ASSERT_GT(report.merge_total_time_ms(), 0);
 }
 
