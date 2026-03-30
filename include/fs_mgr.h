@@ -109,6 +109,9 @@ bool fs_mgr_set_blk_ro(const std::string& blockdev, bool readonly = true);
 // Check if the block device has ext4 filesystem
 bool fs_mgr_is_ext4(const std::string& blk_device);
 
+// Check if the block device has f2fs filesystem
+bool fs_mgr_is_f2fs(const std::string& blk_device);
+
 enum FsMgrUmountStatus : int {
     SUCCESS = 0,
     ERROR_UNKNOWN = 1 << 0,
