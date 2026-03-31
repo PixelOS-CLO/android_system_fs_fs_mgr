@@ -408,7 +408,7 @@ class SnapshotManager final : public ISnapshotManager {
     // Resume the snapshot merge.
     bool ResumeSnapshotMerge();
 
-    enum class SnapshotDriver { DM_SNAPSHOT, DM_USER, UBLK };
+    enum class SnapshotDriver { DM_USER, UBLK };
 
     bool UpdateUsesUblk();
     // Add new public entries above this line.

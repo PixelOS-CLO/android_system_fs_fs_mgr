@@ -161,10 +161,6 @@ static std::string GetSnapshotCowName(const std::string& snapshot_name,
             return snapshot_name;
         }
 
-        case SnapshotManager::SnapshotDriver::DM_SNAPSHOT: {
-            return snapshot_name + "-user-cow";
-        }
-
         default: {
             LOG(ERROR) << "Invalid snapshot driver";
             return "";
@@ -1398,9 +1394,6 @@ bool SnapshotManager::IsSnapshotDevice(const std::string& dm_name, TargetInfo* t
     } else if (type == "user") {
         // Case 2: dm-user device
         is_recognized_snapshot = true;
-    } else if (type == "snapshot" || type == "snapshot-merge") {
-        // Case 3: dm-snapshot or dm-snapshot-merge device
-        is_recognized_snapshot = true;
     }
 
     if (is_recognized_snapshot) {
@@ -1648,7 +1641,7 @@ auto SnapshotManager::CheckTargetMergeState(LockedFile* lock, const std::string&
             return MergeResult(UpdateState::MergeCompleted);
         }
 
-        LOG(ERROR) << "Expected snapshot or snapshot-merge for device: " << name;
+        LOG(ERROR) << "Expected userspace snapshot device: " << name;
         return MergeResult(UpdateState::MergeFailed, MergeFailureCode::UnknownTargetType);
     }
 
