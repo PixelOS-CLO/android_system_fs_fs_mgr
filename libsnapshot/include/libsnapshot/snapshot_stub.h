@@ -28,8 +28,6 @@ class SnapshotManagerStub : public ISnapshotManager {
     bool BeginUpdate() override;
     bool CancelUpdate() override;
     bool FinishedSnapshotWrites(bool wipe) override;
-    void UpdateCowStats(ISnapshotMergeStats* stats) override;
-    MergeFailureCode ReadMergeFailureCode() override;
     bool InitiateMerge() override;
     UpdateState ProcessUpdateState(const std::function<bool()>& callback = {},
                                    const std::function<bool()>& before_cancel = {}) override;
@@ -54,12 +52,11 @@ class SnapshotManagerStub : public ISnapshotManager {
             const std::unique_ptr<AutoDevice>& metadata_device) override;
     bool Dump(std::ostream& os) override;
     std::unique_ptr<AutoDevice> EnsureMetadataMounted() override;
-    ISnapshotMergeStats* GetSnapshotMergeStatsInstance() override;
     bool MapAllSnapshots(const std::chrono::milliseconds& timeout_ms) override;
     bool UnmapAllSnapshots() override;
-    std::string ReadSourceBuildFingerprint() override;
-    void SetMergeStatsFeatures(ISnapshotMergeStats* stats) override;
     bool IsCancelUpdateSafe() override;
+    SnapshotMergeReport ReadMergeReport() override;
+    bool WriteMergeReport(const SnapshotMergeReport& report) override;
 };
 
 }  // namespace android::snapshot
