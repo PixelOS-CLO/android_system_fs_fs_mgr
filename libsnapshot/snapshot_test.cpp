@@ -24,6 +24,7 @@
 
 #include <chrono>
 #include <deque>
+#include <filesystem>
 #include <future>
 #include <iostream>
 #include <thread>
@@ -92,6 +93,7 @@ using namespace ::testing;
 using namespace android::storage_literals;
 using namespace std::chrono_literals;
 using namespace std::string_literals;
+namespace fs = std::filesystem;
 
 // Global states. See test_helpers.h.
 std::unique_ptr<SnapshotManager> sm;
@@ -2673,6 +2675,39 @@ TEST_F(SnapshotUpdateTest, NoSpaceSimulation) {
     auto ret = sm->CreateUpdateSnapshots(manifest_);
     ASSERT_FALSE(ret.is_ok());
     ASSERT_EQ(ret.error_code(), Return::ErrorCode::NO_SPACE);
+}
+
+TEST_F(SnapshotUpdateTest, CorruptedSnapshotState) {
+    auto old_sys_size = GetSize(sys_);
+    auto old_prd_size = GetSize(prd_);
+
+    // Grow |sys| but shrink |prd|.
+    SetSize(sys_, old_sys_size * 2);
+    sys_->set_estimate_cow_size(8_MiB);
+    SetSize(prd_, old_prd_size / 2);
+    prd_->set_estimate_cow_size(1_MiB);
+
+    AddOperationForPartitions();
+
+    ASSERT_TRUE(sm->BeginUpdate());
+    ASSERT_TRUE(sm->CreateUpdateSnapshots(manifest_));
+    ASSERT_TRUE(WriteSnapshots());
+
+    // Should succeed before corruption.
+    ASSERT_TRUE(sm->MapAllSnapshots(10s));
+    ASSERT_TRUE(sm->UnmapAllSnapshots());
+
+    // Corrupt the snapshot state.
+    auto snapshots_dir = test_device->GetMetadataDir() + "/snapshots";
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(snapshots_dir, ec)) {
+        int rv = truncate(entry.path().c_str(), 0);
+        ASSERT_EQ(rv, 0) << "ftruncate failed with " << strerror(errno);
+    }
+    ASSERT_FALSE(ec);
+
+    // This should fail if we're not on the target slot.
+    ASSERT_FALSE(sm->MapAllSnapshots(10s));
 }
 
 class FlashAfterUpdateTest : public SnapshotUpdateTest,

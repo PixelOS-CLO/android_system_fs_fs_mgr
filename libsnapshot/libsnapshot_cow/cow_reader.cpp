@@ -19,8 +19,7 @@
 
 #include <algorithm>
 #include <optional>
-#include <unordered_map>
-#include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <android-base/file.h>
@@ -69,12 +68,7 @@ bool ReadCowHeader(android::base::borrowed_fd fd, CowHeaderV3* header) {
 }
 
 CowReader::CowReader(ReaderFlags reader_flag, bool is_merge)
-    : fd_(-1),
-      header_(),
-      fd_size_(0),
-      block_pos_index_(std::make_shared<std::vector<int>>()),
-      reader_flag_(reader_flag),
-      is_merge_(is_merge) {}
+    : fd_(-1), header_(), fd_size_(0), reader_flag_(reader_flag), is_merge_(is_merge) {}
 
 std::unique_ptr<CowReader> CowReader::CloneCowReader() {
     auto cow = std::make_unique<CowReader>();
@@ -88,7 +82,6 @@ std::unique_ptr<CowReader> CowReader::CloneCowReader() {
     cow->num_total_data_ops_ = num_total_data_ops_;
     cow->num_ordered_ops_to_merge_ = num_ordered_ops_to_merge_;
     cow->xor_data_loc_ = xor_data_loc_;
-    cow->block_pos_index_ = block_pos_index_;
     cow->is_merge_ = is_merge_;
     return cow;
 }
@@ -178,6 +171,86 @@ uint32_t CowReader::GetMaxCompressionSize() {
             LOG(ERROR) << "Unknown version: " << header_.prefix.major_version;
             return 0;
     }
+}
+
+bool CowReader::VerifyMergeSequence(const std::vector<uint32_t>& vec) const {
+    std::vector<bool> is_in_ops;
+    for (const auto& op : *ops_) {
+        if (IsMetadataOp(op)) {
+            continue;
+        }
+        if (op.new_block >= is_in_ops.size()) {
+            is_in_ops.resize(op.new_block + 1);
+        }
+        is_in_ops[op.new_block] = true;
+    }
+    for (const auto& block : vec) {
+        if (block >= is_in_ops.size() || !is_in_ops[block]) {
+            LOG(INFO) << "Block " << block << " is in merge sequence, but not part of any COW op.";
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ByNewBlock(const CowOperation& a, const CowOperation& b) {
+    const bool is_metadata_a = IsMetadataOp(a);
+    const bool is_metadata_b = IsMetadataOp(b);
+    if (is_metadata_a != is_metadata_b) {
+        return is_metadata_a < is_metadata_b;
+    }
+    return a.new_block < b.new_block;
+}
+
+bool ByRevNewBlock(const CowOperation& a, const CowOperation& b) {
+    return ByNewBlock(b, a);
+}
+
+bool CowReader::GetMergeOrder(std::vector<uint32_t>* merge_op_blocks) {
+    switch (header_.prefix.major_version) {
+        case 1:
+        case 2:
+            if (!GetSequenceDataV2(merge_op_blocks)) {
+                LOG(ERROR) << "Failed to get V2 merge sequence data";
+                return false;
+            }
+            break;
+        case 3:
+            if (!GetSequenceData(merge_op_blocks)) {
+                LOG(ERROR) << "Failed to get V3 merge sequence data";
+                return false;
+            }
+            break;
+        default:
+            break;
+    }
+    return true;
+}
+
+// Partition the ops array such that all ops which |p| returns true
+// is before all ops which |p| returns false.
+// std::partition does not guarantee relative ordering of elements
+// But this implementation preserves relative ordering for elements
+// which |p| returns true
+
+template <class ForwardIt, class UnaryPred>
+ForwardIt Partition(ForwardIt first, ForwardIt last, UnaryPred p) {
+    first = std::find_if_not(first, last, p);
+    if (first == last) return first;
+
+    for (auto i = std::next(first); i != last; ++i)
+        if (p(*i)) {
+            std::iter_swap(i, first);
+            ++first;
+        }
+
+    return first;
+}
+template <typename Pred>
+size_t PartitionOps(std::vector<CowOperation>* ops, const Pred& p) {
+    auto it = Partition(ops->begin(), ops->end(), p);
+    size_t idx = std::distance(ops->begin(), it);
+    return idx;
 }
 
 //
@@ -284,52 +357,44 @@ uint32_t CowReader::GetMaxCompressionSize() {
 // Merge-2 - Batch-merge {Replace-op-7, Replace-op-6, Zero-op-8,
 //                        Replace-op-4, Zero-op-9, Replace-op-5 }
 //==============================================================
+
 bool CowReader::PrepMergeOps() {
-    std::vector<uint32_t> other_ops;
-    std::vector<uint32_t> merge_op_blocks;
-    std::unordered_map<uint32_t, int> block_map;
     std::vector<uint32_t> sequence_data;
-
-    switch (header_.prefix.major_version) {
-        case 1:
-        case 2:
-            if (!GetSequenceDataV2(&sequence_data)) return false;
-            break;
-        case 3:
-            if (!GetSequenceData(&sequence_data)) return false;
-            break;
-        default:
-            break;
+    if (!GetMergeOrder(&sequence_data)) {
+        return false;
     }
-
-    std::unordered_set<uint32_t> seq_ops_set(sequence_data.begin(), sequence_data.end());
-    merge_op_blocks = std::move(sequence_data);
-
-    for (size_t i = 0; i < ops_->size(); i++) {
-        auto& current_op = ops_->data()[i];
-
-        if (IsMetadataOp(current_op)) {
-            continue;
+    // Metadata ops do not need to be merged, so strip
+    ops_->erase(std::remove_if(ops_->begin(), ops_->end(), IsMetadataOp), ops_->end());
+    size_t ordered_ops_count = 0;
+    uint32_t max_sequence_block = 0;
+    if (sequence_data.empty()) {
+        ordered_ops_count = PartitionOps(ops_.get(), IsOrderedOp);
+    } else {
+        std::vector<bool> is_in_sequence;
+        max_sequence_block = *std::max_element(sequence_data.begin(), sequence_data.end());
+        is_in_sequence.resize(max_sequence_block + 1);
+        for (const auto& block : sequence_data) {
+            is_in_sequence[block] = true;
         }
-
-        // Sequence ops must be the first ops in the stream.
-        if (seq_ops_set.empty() && IsOrderedOp(current_op)) {
-            merge_op_blocks.emplace_back(current_op.new_block);
-        } else if (seq_ops_set.count(current_op.new_block) == 0) {
-            other_ops.push_back(current_op.new_block);
-        }
-        block_map.insert({current_op.new_block, i});
-    }
-
-    for (auto block : merge_op_blocks) {
-        if (block_map.count(block) == 0) {
-            LOG(ERROR) << "Invalid Sequence Ops. Could not find Cow Op for new block " << block;
+        ordered_ops_count =
+                PartitionOps(ops_.get(), [&is_in_sequence](const CowOperation& op) -> bool {
+                    if (op.new_block >= is_in_sequence.size()) {
+                        return false;
+                    }
+                    return is_in_sequence[op.new_block];
+                });
+        // This means there's some ops which are in merge sequence but not
+        // found in COW image, run |VerifyMergeSequence| to print helpful debug
+        // messages
+        if (ordered_ops_count != sequence_data.size()) {
+            LOG(ERROR) << "Invalid merge sequence";
+            VerifyMergeSequence(sequence_data);
             return false;
         }
     }
 
-    if (merge_op_blocks.size() > header_.num_merge_ops) {
-        num_ordered_ops_to_merge_ = merge_op_blocks.size() - header_.num_merge_ops;
+    if (ordered_ops_count > header_.num_merge_ops) {
+        num_ordered_ops_to_merge_ = ordered_ops_count - header_.num_merge_ops;
     } else {
         num_ordered_ops_to_merge_ = 0;
     }
@@ -340,40 +405,38 @@ bool CowReader::PrepMergeOps() {
     // dm-snapshot-merge requires decreasing order as we iterate the blocks
     // in reverse order.
     if (reader_flag_ == ReaderFlags::USERSPACE_MERGE) {
-        std::sort(other_ops.begin(), other_ops.end());
+        std::sort(ops_->begin() + ordered_ops_count, ops_->end(), ByNewBlock);
     } else {
-        std::sort(other_ops.begin(), other_ops.end(), std::greater<uint32_t>());
+        std::sort(ops_->begin() + ordered_ops_count, ops_->end(), ByRevNewBlock);
     }
-
-    merge_op_blocks.insert(merge_op_blocks.end(), other_ops.begin(), other_ops.end());
-
-    num_total_data_ops_ = merge_op_blocks.size();
+    LOG(INFO) << "Merge sequence ordered ops " << ordered_ops_count << " other ops "
+              << ops_->size() - ordered_ops_count;
     if (header_.num_merge_ops > 0) {
         merge_op_start_ = header_.num_merge_ops;
     }
-
-    if (is_merge_) {
-        // Metadata ops are not required for merge. Thus, just re-arrange
-        // the ops vector as required for merge operations.
-        auto merge_ops_buffer = std::make_shared<std::vector<CowOperation>>();
-        merge_ops_buffer->reserve(num_total_data_ops_);
-        for (auto block : merge_op_blocks) {
-            merge_ops_buffer->emplace_back(ops_->data()[block_map.at(block)]);
+    if (!sequence_data.empty()) {
+        // For block X, what is its position in the merge sequence?
+        std::vector<uint32_t> block_order;
+        block_order.resize(max_sequence_block + 1, sequence_data.size());
+        for (size_t i = 0; i < sequence_data.size(); i++) {
+            block_order[sequence_data[i]] = i;
         }
-        ops_->clear();
-        ops_ = merge_ops_buffer;
-        ops_->shrink_to_fit();
-        LOG(INFO) << "Done preparing for merge, op buffer size " << ops_->size();
-    } else {
-        for (auto block : merge_op_blocks) {
-            block_pos_index_->push_back(block_map.at(block));
+        // Re-order ops array according to block numbers in merge sequence.
+        auto& ops = *ops_;
+        for (size_t i = 0; i < sequence_data.size(); i++) {
+            CHECK_LT(ops[i].new_block, block_order.size()) << " " << ops[i];
+            if (block_order[ops[i].new_block] >= sequence_data.size()) {
+                LOG(ERROR) << "Op " << ops[i]
+                           << " is not an ordered op, but get partition as an ordered op, this is "
+                              "likely a bug in PartitionOps";
+                return false;
+            }
+            while (i != block_order[ops[i].new_block]) {
+                std::swap(ops[i], ops[block_order[ops[i].new_block]]);
+            }
         }
-        LOG(INFO) << "Done preparing for iterate, block idx buffer size "
-                  << block_pos_index_->size();
     }
-
-    block_map.clear();
-    merge_op_blocks.clear();
+    num_total_data_ops_ = ops_->size();
 
     return true;
 }
@@ -437,7 +500,7 @@ bool CowReader::VerifyMergeOps() {
 
         // Op should not be a metadata
         if (IsMetadataOp(*op)) {
-            LOG(ERROR) << "Metadata op: " << op << " found during merge sequence";
+            LOG(ERROR) << "Metadata op: " << *op << " found during merge sequence";
             return false;
         }
 
@@ -540,6 +603,26 @@ void CowOpIter::Next() {
     CHECK(!AtEnd());
     op_iter_++;
 }
+
+class CowRevOpIter final : public ICowOpIter {
+  public:
+    CowRevOpIter(std::shared_ptr<std::vector<CowOperation>>& ops, uint64_t start)
+        : ops_(ops), start_(start) {
+        op_iter_ = ops_->rbegin();
+    }
+
+    bool AtEnd() override { return op_iter_ == ops_->rend() - start_; }
+    const CowOperation* Get() override { return &(*op_iter_); }
+    void Next() override { ++op_iter_; }
+
+    void Prev() override { --op_iter_; }
+    bool AtBegin() override { return op_iter_ == ops_->rbegin(); }
+
+  private:
+    std::shared_ptr<std::vector<CowOperation>> ops_;
+    std::vector<CowOperation>::reverse_iterator op_iter_;
+    uint64_t start_;
+};
 
 const CowOperation* CowOpIter::Get() {
     CHECK(!AtEnd());
@@ -651,14 +734,26 @@ std::unique_ptr<ICowOpIter> CowReader::GetOpIter(bool merge_progress) {
     return std::make_unique<CowOpIter>(ops_, merge_progress ? merge_op_start_ : 0);
 }
 
+std::unique_ptr<ICowOpIter> CowReader::GetRevOpIter(bool merge_progress) {
+    return std::make_unique<CowRevOpIter>(ops_, merge_progress ? merge_op_start_ : 0);
+}
+
 std::unique_ptr<ICowOpIter> CowReader::GetRevMergeOpIter(bool ignore_progress) {
-    return std::make_unique<CowRevMergeOpIter>(ops_, block_pos_index_,
-                                               ignore_progress ? 0 : merge_op_start_);
+    // num_total_data_ops_ == 0 means PrepMergeOps() never called, merge order
+    // is not initialized.
+    if (num_total_data_ops_ == 0) {
+        return std::make_unique<CowRevOpIter>(ops_, ops_->size());
+    }
+    return GetRevOpIter(!ignore_progress);
 }
 
 std::unique_ptr<ICowOpIter> CowReader::GetMergeOpIter(bool ignore_progress) {
-    return std::make_unique<CowMergeOpIter>(ops_, block_pos_index_,
-                                            ignore_progress ? 0 : merge_op_start_);
+    // num_total_data_ops_ == 0 means PrepMergeOps() never called, merge order
+    // is not initialized.
+    if (num_total_data_ops_ == 0) {
+        return std::make_unique<CowOpIter>(ops_, ops_->size());
+    }
+    return GetOpIter(!ignore_progress);
 }
 
 bool CowReader::GetRawBytes(const CowOperation* op, void* buffer, size_t len, size_t* read) {

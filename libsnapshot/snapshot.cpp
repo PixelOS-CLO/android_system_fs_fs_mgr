@@ -2624,11 +2624,18 @@ bool SnapshotManager::MapPartitionWithSnapshot(LockedFile* lock,
         if (live_snapshot_status->state() == SnapshotState::NONE ||
             live_snapshot_status->cow_partition_size() + live_snapshot_status->cow_file_size() ==
                     0) {
-            LOG(WARNING) << "Snapshot status for " << params.GetPartitionName()
+
+            LOG(ERROR) << "Snapshot status for " << params.GetPartitionName()
                          << " is invalid, ignoring: state = "
                          << SnapshotState_Name(live_snapshot_status->state())
                          << ", cow_partition_size = " << live_snapshot_status->cow_partition_size()
                          << ", cow_file_size = " << live_snapshot_status->cow_file_size();
+            if (ReadUpdateState(lock) == UpdateState::Initiated) {
+                // If we lost snapshot status while applying an OTA, we must not proceed.
+                LOG(ERROR) << "Snapshot status is corrupt, OTA must be discarded.";
+                return false;
+            }
+
             live_snapshot_status.reset();
         }
     } while (0);
@@ -2908,23 +2915,21 @@ bool SnapshotManager::UnmapUserspaceSnapshotDevice(LockedFile* lock,
     DeviceMapper::TargetInfo target;
     auto is_mapped = IsSnapshotDevice(snapshot_name, &target);
 
-    // b/479113971
-    //
-    // this check is just for cuttlefish instance to pass update_engine_integration tests. On
-    // startup, CF has a system_b partition for storing system_other. This is an active DM device
-    // that is not mapped. For regular OTA, we write snapshot status to mark system_b as inactive,
-    // but in testing we don't write this status and fail when we attempt to read the status.
-    if (!is_mapped && state == DmDeviceState::ACTIVE) {
-        LOG(INFO) << "Probably not a snapshot , returning unmap snapshot true for: "
-                  << snapshot_name;
-        return true;
-    }
-
     CHECK(lock);
 
     SnapshotStatus snapshot_status;
 
     if (!ReadSnapshotStatus(lock, snapshot_name, &snapshot_status)) {
+        // this check is just for CF to pass update_engine_integration tests. On
+        // startup, CF has a system_b partition for storing system_other. This is an active DM
+        // device that is not mapped. For regular OTA, we write snapshot status to mark system_b as
+        // inactive, but in testing we don't write this status and fail when we attempt to read the
+        // status.
+        if (DeleteDeviceIfExists(snapshot_name)) {
+            LOG(INFO) << "deleted active device that is not a snapshot " << snapshot_name;
+            return true;
+        }
+        LOG(ERROR) << "Could not delete device: " << snapshot_name;
         return false;
     }
     // If the merge is complete, then we switch dm tables which is equivalent
