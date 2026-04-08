@@ -19,6 +19,8 @@
 #include <cstring>
 #include <memory>
 #include <ostream>
+#include <string>
+#include <vector>
 
 #include <libavb/libavb.h>
 

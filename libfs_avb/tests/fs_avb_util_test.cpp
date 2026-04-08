@@ -16,6 +16,9 @@
 
 #include <fs_avb/fs_avb_util.h>
 
+#include <algorithm>
+#include <vector>
+
 #include "fs_avb_test_util.h"
 
 namespace fs_avb_host_test {
@@ -117,6 +120,50 @@ TEST_F(PublicFsAvbUtilTest, GetHashtreeDescriptor_NotFound) {
     auto hashtree_desc =
             GetHashtreeDescriptor("boot" /* avb_partition_name */, std::move(boot_vbmeta));
     EXPECT_EQ(nullptr, hashtree_desc);
+}
+
+TEST_F(PublicFsAvbUtilTest, GetAllPartitionNames) {
+    // Generates a raw boot.img
+    const size_t boot_image_size = 5 * 1024 * 1024;
+    const size_t boot_partition_size = 10 * 1024 * 1024;
+    base::FilePath boot_path = GenerateImage("boot.img", boot_image_size);
+    // Adds AVB Hash Footer.
+    AddAvbFooter(boot_path, "hash", "boot", boot_partition_size, "SHA256_RSA2048",
+                 10, data_dir_.Append("testkey_rsa2048.pem"), "d00df00d",
+                 "--internal_release_string \"unit test\"");
+
+    // Generates a raw system.img
+    const size_t system_image_size = 10 * 1024 * 1024;
+    const size_t system_partition_size = 15 * 1024 * 1024;
+    base::FilePath system_path = GenerateImage("system.img", system_image_size);
+    // Adds AVB Hashtree Footer.
+    AddAvbFooter(system_path, "hashtree", "system", system_partition_size,
+                 "SHA512_RSA4096", 20, data_dir_.Append("testkey_rsa4096.pem"),
+                 "d00df00d", "--internal_release_string \"unit test\"");
+
+    // Generates chain partition descriptors.
+    base::FilePath rsa2048_public_key =
+            ExtractPublicKeyAvb(data_dir_.Append("testkey_rsa2048.pem"));
+
+    // Makes a vbmeta image including 'boot' and 'system' descriptors.
+    GenerateVBMetaImage("vbmeta.img", "SHA256_RSA8192", 0,
+                        data_dir_.Append("testkey_rsa8192.pem"),
+                        {boot_path, system_path},
+                        /* include_descriptor_image_paths */
+                        {{"chain_partition", 1, rsa2048_public_key}},
+                        /* chain_partitions */
+                        "--internal_release_string \"unit test\"");
+
+    auto vbmeta = LoadVBMetaData("vbmeta.img");
+    auto partition_names = GetAllPartitionNames(vbmeta);
+
+    std::vector<std::string> expected_names = {"boot", "system"};
+    EXPECT_EQ(expected_names.size(), partition_names.size());
+    for (const auto& name : expected_names) {
+        auto it = std::find(partition_names.begin(), partition_names.end(),
+                            name);
+        EXPECT_NE(it, partition_names.end());
+    }
 }
 
 }  // namespace fs_avb_host_test
