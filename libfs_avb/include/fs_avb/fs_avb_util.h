@@ -17,6 +17,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include <fs_avb/types.h>
 #include <fstab/fstab.h>
@@ -52,6 +53,10 @@ std::unique_ptr<FsAvbHashDescriptor> GetHashDescriptor(const std::string& avb_pa
 
 std::string GetAvbPropertyDescriptor(const std::string& key,
                                      const std::vector<VBMetaData>& vbmeta_images);
+
+// Returns a list of all partition names (Hash and Hashtree descriptors) in the
+// vbmeta image.
+std::vector<std::string> GetAllPartitionNames(const VBMetaData& vbmeta);
 
 }  // namespace fs_mgr
 }  // namespace android

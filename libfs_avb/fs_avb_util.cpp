@@ -156,5 +156,73 @@ std::string GetAvbPropertyDescriptor(const std::string& key,
     return "";
 }
 
+template <typename T>
+static bool GetPartitionName(const AvbDescriptor* descriptor,
+                             bool (*validate_func)(const T*, T*),
+                             const char** out_name, size_t* out_len) {
+    T desc;
+    if (validate_func(reinterpret_cast<const T*>(descriptor), &desc)) {
+        *out_name = reinterpret_cast<const char*>(descriptor) + sizeof(T);
+        *out_len = desc.partition_name_len;
+        return true;
+    }
+    return false;
+}
+
+std::vector<std::string> GetAllPartitionNames(const VBMetaData& vbmeta) {
+    if (vbmeta.size() == 0) {
+        return {};
+    }
+
+    std::vector<std::string> partition_names;
+    size_t num_descriptors;
+    std::unique_ptr<const AvbDescriptor*[], decltype(&avb_free)> descriptors(
+            avb_descriptor_get_all(vbmeta.data(), vbmeta.size(),
+                                   &num_descriptors),
+            avb_free);
+
+    if (!descriptors || num_descriptors < 1) {
+        return {};
+    }
+
+    for (size_t i = 0; i < num_descriptors; i++) {
+        AvbDescriptor desc;
+        if (!avb_descriptor_validate_and_byteswap(descriptors[i], &desc)) {
+            LWARNING << "Descriptor[" << i
+                     << "] is invalid in vbmeta: " << vbmeta.partition();
+            continue;
+        }
+
+        const char* partition_name_ptr = nullptr;
+        size_t partition_name_len = 0;
+        bool found = false;
+
+        switch (desc.tag) {
+            case AVB_DESCRIPTOR_TAG_HASH:
+                found = GetPartitionName<AvbHashDescriptor>(
+                              descriptors[i],
+                              avb_hash_descriptor_validate_and_byteswap,
+                              &partition_name_ptr, &partition_name_len);
+                break;
+            case AVB_DESCRIPTOR_TAG_HASHTREE:
+                found = GetPartitionName<AvbHashtreeDescriptor>(
+                              descriptors[i],
+                              avb_hashtree_descriptor_validate_and_byteswap,
+                              &partition_name_ptr, &partition_name_len);
+                break;
+            default:
+                break;
+        }
+
+        if (found && partition_name_len > 0) {
+            partition_names.emplace_back(partition_name_ptr,
+                                         partition_name_len);
+        }
+    }
+
+
+    return partition_names;
+}
+
 }  // namespace fs_mgr
 }  // namespace android
