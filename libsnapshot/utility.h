@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -129,6 +130,9 @@ std::ostream& operator<<(std::ostream& os, CancelResult);
 void AppendExtent(google::protobuf::RepeatedPtrField<chromeos_update_engine::Extent>* extents,
                   uint64_t start_block, uint64_t num_blocks);
 
+// Wrapper around android::base::RemoveFileIfExists that includes logging.
+bool RemoveFileIfExists(const std::string& path);
+
 bool GetLegacyCompressionEnabledProperty();
 bool GetIouringEnabledProperty();
 bool GetXorCompressionEnabledProperty();
@@ -137,8 +141,15 @@ bool GetSkipVerificationProperty();
 bool GetUblkEnabledProperty();
 bool CanUseUserspaceSnapshots();
 bool GetDebugFlag(const std::string& flag);
+std::optional<int> GetDebugFlagInt(const std::string& flag);
 // Swap the suffix of a partition name.
 std::string GetOtherPartitionName(const std::string& name);
+
+static inline uint64_t SteadyClockNowMs() {
+    auto now = std::chrono::steady_clock::now();
+    auto epoch = now.time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(epoch).count();
+}
 
 }  // namespace snapshot
 }  // namespace android
