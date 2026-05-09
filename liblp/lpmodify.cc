@@ -38,6 +38,9 @@ enum class SubCommand {
     kUnknown,
     kAdd,
     kRemove,
+    kAddGroup,
+    kRemoveGroup,
+    kChangeGroup,
 };
 
 static int usage(const char* program, SubCommand cmd = SubCommand::kUnknown) {
@@ -71,6 +74,24 @@ static int usage(const char* program, SubCommand cmd = SubCommand::kUnknown) {
                      "/dev/block/by-name/super).\n";
         std::cerr << "  PARTNAME                      Name of the partition to remove.\n";
     }
+    if (cmd == SubCommand::kUnknown || cmd == SubCommand::kAddGroup) {
+        std::cerr << "\naddgrp sub-command options:\n";
+        std::cerr << "  SUPER_DEVICE                  Path to the super block device.\n";
+        std::cerr << "  GROUPNAME                     Name of the new partition group.\n";
+        std::cerr << "  SIZE                          Maximum size in bytes (0 for unlimited).\n";
+    }
+    if (cmd == SubCommand::kUnknown || cmd == SubCommand::kRemoveGroup) {
+        std::cerr << "\nrmgrp sub-command options:\n";
+        std::cerr << "  SUPER_DEVICE                  Path to the super block device.\n";
+        std::cerr << "  GROUPNAME                     Name of the partition group to remove.\n";
+        std::cerr << "  --force                       Remove all partitions in the group first.\n";
+    }
+    if (cmd == SubCommand::kUnknown || cmd == SubCommand::kChangeGroup) {
+        std::cerr << "\nchgrp sub-command options:\n";
+        std::cerr << "  SUPER_DEVICE                  Path to the super block device.\n";
+        std::cerr << "  PARTNAME                      Name of the partition to move.\n";
+        std::cerr << "  GROUPNAME                     Name of the new group for the partition.\n";
+    }
     std::cerr << "\nCommon options:\n";
     std::cerr << "  --slot <number>               Metadata slot number to use (default is 0).\n";
     std::cerr << "  -h, --help                    Show this help message.\n";
@@ -88,6 +109,9 @@ class SuperModifyHelper final {
                                     const std::string& group_name, uint32_t attributes,
                                     uint64_t partition_size, bool replace);
     bool RemovePartition(const std::string& partition_name);
+    bool AddGroup(const std::string& group_name, uint64_t maximum_size);
+    bool RemoveGroup(const std::string& group_name, bool force);
+    bool ChangePartitionGroup(const std::string& partition_name, const std::string& group_name);
     bool Finalize();
 
   private:
@@ -156,12 +180,74 @@ bool SuperModifyHelper::RemovePartition(const std::string& partition_name) {
     auto partition = builder_->FindPartition(partition_name);
     if (!partition) {
         std::cerr << "Could not find partition to remove: " << partition_name << "\n";
-        // This might not be an error if the goal is to ensure it's removed.
-        // For now, let's treat it as a failure to make the operation explicit.
         return false;
     }
     builder_->RemovePartition(partition_name);
     std::cout << "Successfully marked partition " << partition_name << " for removal." << std::endl;
+    return UpdateSuperMetadata();
+}
+
+bool SuperModifyHelper::AddGroup(const std::string& group_name, uint64_t maximum_size) {
+    if (group_name.size() >= sizeof(LpMetadataPartitionGroup::name)) {
+        std::cerr << "Group name too long: " << group_name << " (max 35 characters)\n";
+        return false;
+    }
+    if (builder_->FindGroup(group_name)) {
+        std::cerr << "Group already exists: " << group_name << "\n";
+        return false;
+    }
+    if (maximum_size > builder_->AllocatableSpace()) {
+        std::cerr << "Warning: group size " << maximum_size
+                  << " exceeds total allocatable space " << builder_->AllocatableSpace() << "\n";
+    }
+    if (!builder_->AddGroup(group_name, maximum_size)) {
+        std::cerr << "Failed to add group: " << group_name << "\n";
+        return false;
+    }
+    std::cout << "Successfully added group " << group_name << " with max size " << maximum_size
+              << " bytes." << std::endl;
+    return UpdateSuperMetadata();
+}
+
+bool SuperModifyHelper::RemoveGroup(const std::string& group_name, bool force) {
+    if (group_name == android::fs_mgr::kDefaultGroup) {
+        std::cerr << "Cannot remove the default group.\n";
+        return false;
+    }
+    auto group = builder_->FindGroup(group_name);
+    if (!group) {
+        std::cerr << "Could not find group to remove: " << group_name << "\n";
+        return false;
+    }
+    auto partitions = builder_->ListPartitionsInGroup(group_name);
+    if (!partitions.empty() && !force) {
+        std::cerr << "Group " << group_name << " is not empty. Use --force to remove it and its "
+                  << partitions.size() << " partitions.\n";
+        return false;
+    }
+    builder_->RemoveGroupAndPartitions(group_name);
+    std::cout << "Successfully removed group " << group_name << "." << std::endl;
+    return UpdateSuperMetadata();
+}
+
+bool SuperModifyHelper::ChangePartitionGroup(const std::string& partition_name,
+                                             const std::string& group_name) {
+    auto partition = builder_->FindPartition(partition_name);
+    if (!partition) {
+        std::cerr << "Could not find partition: " << partition_name << "\n";
+        return false;
+    }
+    if (!builder_->FindGroup(group_name)) {
+        std::cerr << "Could not find group: " << group_name << "\n";
+        return false;
+    }
+    if (!builder_->ChangePartitionGroup(partition, group_name)) {
+        std::cerr << "Failed to change partition " << partition_name << " to group " << group_name
+                  << ".\n";
+        return false;
+    }
+    std::cout << "Successfully moved partition " << partition_name << " to group " << group_name
+              << "." << std::endl;
     return UpdateSuperMetadata();
 }
 
@@ -209,6 +295,22 @@ enum class AddOptionCode : int {
 
 enum class RemoveOptionCode : int {
     kSlot = 1,  // Common option
+    kHelp = 'h',
+};
+
+enum class AddGroupOptionCode : int {
+    kSlot = 1,
+    kHelp = 'h',
+};
+
+enum class RemoveGroupOptionCode : int {
+    kForce = 1,
+    kSlot = 2,
+    kHelp = 'h',
+};
+
+enum class ChangeGroupOptionCode : int {
+    kSlot = 1,
     kHelp = 'h',
 };
 
@@ -342,6 +444,144 @@ int HandleRemoveCommand(int argc, char* argv[], const char* program_name) {
     return EX_OK;
 }
 
+int HandleAddGroupCommand(int argc, char* argv[], const char* program_name) {
+    struct option options[] = {
+            {"slot", required_argument, nullptr, static_cast<int>(AddGroupOptionCode::kSlot)},
+            {"help", no_argument, nullptr, static_cast<int>(AddGroupOptionCode::kHelp)},
+            {nullptr, 0, nullptr, 0},
+    };
+
+    uint32_t slot = 0;
+    int rv;
+    optind = 1;
+    while ((rv = getopt_long(argc, argv, "h", options, nullptr)) != -1) {
+        switch (rv) {
+            case static_cast<int>(AddGroupOptionCode::kHelp):
+                return usage(program_name, SubCommand::kAddGroup);
+            case static_cast<int>(AddGroupOptionCode::kSlot):
+                if (!android::base::ParseUint(optarg, &slot)) {
+                    std::cerr << "Error: Invalid argument for --slot: " << optarg << "\n";
+                    return usage(program_name, SubCommand::kAddGroup);
+                }
+                break;
+            default:
+                return usage(program_name, SubCommand::kAddGroup);
+        }
+    }
+
+    if (argc - optind != 3) {
+        std::cerr << "Error: Incorrect number of arguments for 'addgrp'.\n\n";
+        return usage(program_name, SubCommand::kAddGroup);
+    }
+
+    std::string super_device_path = argv[optind++];
+    std::string group_name = argv[optind++];
+    uint64_t group_size = 0;
+    if (!android::base::ParseUint(argv[optind++], &group_size)) {
+        std::cerr << "Error: Invalid group size.\n";
+        return usage(program_name, SubCommand::kAddGroup);
+    }
+
+    SuperModifyHelper helper(super_device_path, slot);
+    if (!helper.Open()) return EX_SOFTWARE;
+    if (!helper.AddGroup(group_name, group_size)) return EX_SOFTWARE;
+    if (!helper.Finalize()) return EX_SOFTWARE;
+
+    std::cout << "lpmodify addgrp: Group " << group_name << " added successfully.\n";
+    return EX_OK;
+}
+
+int HandleRemoveGroupCommand(int argc, char* argv[], const char* program_name) {
+    struct option options[] = {
+            {"force", no_argument, nullptr, static_cast<int>(RemoveGroupOptionCode::kForce)},
+            {"slot", required_argument, nullptr, static_cast<int>(RemoveGroupOptionCode::kSlot)},
+            {"help", no_argument, nullptr, static_cast<int>(RemoveGroupOptionCode::kHelp)},
+            {nullptr, 0, nullptr, 0},
+    };
+
+    bool force = false;
+    uint32_t slot = 0;
+    int rv;
+    optind = 1;
+    while ((rv = getopt_long(argc, argv, "h", options, nullptr)) != -1) {
+        switch (rv) {
+            case static_cast<int>(RemoveGroupOptionCode::kHelp):
+                return usage(program_name, SubCommand::kRemoveGroup);
+            case static_cast<int>(RemoveGroupOptionCode::kForce):
+                force = true;
+                break;
+            case static_cast<int>(RemoveGroupOptionCode::kSlot):
+                if (!android::base::ParseUint(optarg, &slot)) {
+                    std::cerr << "Error: Invalid argument for --slot: " << optarg << "\n";
+                    return usage(program_name, SubCommand::kRemoveGroup);
+                }
+                break;
+            default:
+                return usage(program_name, SubCommand::kRemoveGroup);
+        }
+    }
+
+    if (argc - optind != 2) {
+        std::cerr << "Error: Incorrect number of arguments for 'rmgrp'.\n\n";
+        return usage(program_name, SubCommand::kRemoveGroup);
+    }
+
+    std::string super_device_path = argv[optind++];
+    std::string group_name = argv[optind++];
+
+    SuperModifyHelper helper(super_device_path, slot);
+    if (!helper.Open()) return EX_SOFTWARE;
+    if (!helper.RemoveGroup(group_name, force)) return EX_SOFTWARE;
+    if (!helper.Finalize()) return EX_SOFTWARE;
+
+    std::cout << "lpmodify rmgrp: Group " << group_name << " removed successfully.\n";
+    return EX_OK;
+}
+
+int HandleChangeGroupCommand(int argc, char* argv[], const char* program_name) {
+    struct option options[] = {
+            {"slot", required_argument, nullptr, static_cast<int>(ChangeGroupOptionCode::kSlot)},
+            {"help", no_argument, nullptr, static_cast<int>(ChangeGroupOptionCode::kHelp)},
+            {nullptr, 0, nullptr, 0},
+    };
+
+    uint32_t slot = 0;
+    int rv;
+    optind = 1;
+    while ((rv = getopt_long(argc, argv, "h", options, nullptr)) != -1) {
+        switch (rv) {
+            case static_cast<int>(ChangeGroupOptionCode::kHelp):
+                return usage(program_name, SubCommand::kChangeGroup);
+            case static_cast<int>(ChangeGroupOptionCode::kSlot):
+                if (!android::base::ParseUint(optarg, &slot)) {
+                    std::cerr << "Error: Invalid argument for --slot: " << optarg << "\n";
+                    return usage(program_name, SubCommand::kChangeGroup);
+                }
+                break;
+            default:
+                return usage(program_name, SubCommand::kChangeGroup);
+        }
+    }
+
+    if (argc - optind != 3) {
+        std::cerr << "Error: Incorrect number of arguments for 'chgrp'.\n\n";
+        return usage(program_name, SubCommand::kChangeGroup);
+    }
+
+    std::string super_device_path = argv[optind++];
+    std::string partition_name = argv[optind++];
+    std::string group_name = argv[optind++];
+
+    SuperModifyHelper helper(super_device_path, slot);
+    if (!helper.Open()) return EX_SOFTWARE;
+    if (!helper.ChangePartitionGroup(partition_name, group_name)) return EX_SOFTWARE;
+    if (!helper.Finalize()) return EX_SOFTWARE;
+
+    std::cout << "lpmodify chgrp: Partition " << partition_name << " moved to group " << group_name
+              << " successfully.\n";
+    return EX_OK;
+}
+
 int main(int argc, char* argv[]) {
     const char* program_name = argv[0];
 
@@ -357,6 +597,12 @@ int main(int argc, char* argv[]) {
         return HandleAddCommand(argc - 1, argv + 1, program_name);
     } else if (subcommand_str == "remove") {
         return HandleRemoveCommand(argc - 1, argv + 1, program_name);
+    } else if (subcommand_str == "addgrp") {
+        return HandleAddGroupCommand(argc - 1, argv + 1, program_name);
+    } else if (subcommand_str == "rmgrp") {
+        return HandleRemoveGroupCommand(argc - 1, argv + 1, program_name);
+    } else if (subcommand_str == "chgrp") {
+        return HandleChangeGroupCommand(argc - 1, argv + 1, program_name);
     } else if (subcommand_str == "--help" || subcommand_str == "-h") {
         return usage(program_name);
     } else {
